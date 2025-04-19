@@ -529,6 +529,11 @@ export default function ImpotsPage() {
         </TabsContent>
         <TabsContent value="projection">
           <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:justify-end items-stretch sm:items-center mt-2">
+              {/* Place here any action buttons related to projection, e.g. Export, Reset, etc. */}
+              {/* Example: */}
+              {/* <Button className="flex-1 sm:flex-initial">Exporter</Button> */}
+            </div>
             <TaxFormTabular
               data={financialData}
               onChange={handleDataChange}
@@ -543,6 +548,11 @@ export default function ImpotsPage() {
         </TabsContent>
         <TabsContent value="conseil">
           <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:justify-end items-stretch sm:items-center mt-2">
+              {/* Place here any action buttons related to advice, e.g. Export, Contact, etc. */}
+              {/* Example: */}
+              {/* <Button className="flex-1 sm:flex-initial">Contacter un conseiller</Button> */}
+            </div>
             <TaxAdvice 
               currentTaxData={currentTaxData}
               projectedTaxData={projectedTaxData}

@@ -384,12 +384,12 @@ export default function PropertyDetailPage() {
           </button>
         </div>
         {/* Garde les autres boutons (modifier, supprimer) alignés à droite */}
-        <div className="flex gap-2">
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:justify-end items-stretch sm:items-center mt-2">
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-initial">
             <Button 
               variant="outline" 
               onClick={() => router.push('/properties')} 
-              className="bg-white text-gray-800 hover:bg-gray-200 border border-gray-300 shadow-sm flex items-center"
+              className="bg-white text-gray-800 hover:bg-gray-200 border border-gray-300 shadow-sm flex items-center w-full sm:w-auto"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -397,10 +397,10 @@ export default function PropertyDetailPage() {
               Retour
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-initial">
             <Button 
               onClick={() => setIsEditModalOpen(true)} 
-              className="bg-white text-gray-800 hover:bg-gray-200 border border-gray-300 shadow-sm flex items-center"
+              className="bg-white text-gray-800 hover:bg-gray-200 border border-gray-300 shadow-sm flex items-center w-full sm:w-auto"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -408,10 +408,10 @@ export default function PropertyDetailPage() {
               Modifier
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-initial">
             <Button 
               onClick={handleDeleteProperty} 
-              className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-300 shadow-sm flex items-center"
+              className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-300 shadow-sm flex items-center w-full sm:w-auto"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

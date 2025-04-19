@@ -154,6 +154,16 @@ export function PropertyRegimeCard({ propertyRegimeId }: PropertyRegimeCardProps
             </table>
           </div>
         </CardContent>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:justify-end items-stretch sm:items-center mt-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsDetailsOpen(true)}
+            className="flex-1 sm:flex-initial"
+          >
+            Voir détails
+          </Button>
+        </div>
       </AnimatedCard>
       
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>

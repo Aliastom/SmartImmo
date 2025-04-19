@@ -1,0 +1,557 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Database } from '@/types/database'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { PropertyModal } from '../components/property-modal'
+import { LeaseModal } from '../components/lease-modal'
+import { useToast } from "@/components/ui/use-toast"
+import { formatCurrency } from '@/lib/utils'
+import { TransactionModal } from '../transaction-modal'
+import { PropertyTransactions } from '../components/property-transactions'
+import { PropertyLoans } from '../components/property-loans'
+import { PropertyDocuments } from '../components/property-documents'
+import { motion } from 'framer-motion'
+import { PageTransition, AnimatedCard, LoadingSpinner } from '@/components/ui/animated'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+
+// Type pour la propriété avec les champs étendus
+interface ExtendedProperty {
+  id: string;
+  user_id: string;
+  name: string;
+  address: string;
+  area: number;
+  bedrooms: number;
+  bathrooms: number;
+  rent: number;
+  value: number;
+  status: 'vacant' | 'rented';
+  image_url: string;
+  created_at: string;
+  updated_at: string;
+  // Champs étendus
+  category: string;
+  type: string;
+  surface: number;
+  rooms: number;
+  floor?: string;
+  year_built?: number;
+  purchase_price?: number;
+  purchase_date?: string;
+  property_tax?: number;
+  insurance_cost?: number;
+  rent_amount?: number;
+}
+
+// Type pour le bail avec les champs étendus
+interface ExtendedLease {
+  id: string;
+  user_id: string;
+  property_id: string;
+  tenant_id: string;
+  created_at: string;
+  updated_at: string;
+  // Champs étendus
+  start_date: string;
+  duration: number;
+  rent_amount: number;
+  deposit_amount: number;
+}
+
+// Type pour le locataire avec le bail
+interface TenantWithLease {
+  id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  lease: ExtendedLease;
+}
+
+type Transaction = Database['public']['Tables']['transactions']['Row']
+
+interface ClientPageProps {
+  id?: string;
+}
+
+export default function ClientPage({ id }: ClientPageProps) {
+  const router = useRouter()
+  const propertyId = id
+  const { toast } = useToast()
+  const supabase = createClientComponentClient<Database>()
+  const [property, setProperty] = useState<ExtendedProperty | null>(null)
+  const [currentTenant, setCurrentTenant] = useState<TenantWithLease | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isLeaseModalOpen, setIsLeaseModalOpen] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [transactionToClone, setTransactionToClone] = useState<Transaction | undefined>()
+
+  const fetchPropertyDetails = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        toast({
+          title: "Session expirée",
+          description: "Veuillez vous reconnecter",
+          variant: "destructive"
+        })
+        router.push('/login')
+        return
+      }
+
+      // Récupérer les détails de la propriété
+      const { data: propertyData, error: propertyError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', propertyId)
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (propertyError) throw propertyError
+      
+      if (!propertyData) {
+        toast({
+          title: "Bien non trouvé",
+          description: "Ce bien n'existe pas ou vous n'avez pas les droits pour y accéder",
+          variant: "destructive"
+        })
+        router.push('/properties')
+        return
+      }
+
+      setProperty(propertyData as ExtendedProperty)
+
+      // Récupérer le locataire actuel et son bail
+      const { data: leaseData, error: leaseError } = await supabase
+        .from('leases')
+        .select(`
+          *,
+          tenants:tenant_id (
+            id, user_id, first_name, last_name, email, phone, created_at, updated_at
+          )
+        `)
+        .eq('property_id', propertyId)
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (leaseError && leaseError.code !== 'PGRST116') {
+        // PGRST116 est le code d'erreur quand aucun résultat n'est trouvé
+        console.error('Error fetching lease:', leaseError)
+      }
+
+      if (leaseData) {
+        setCurrentTenant({
+          id: leaseData.tenants.id,
+          user_id: leaseData.tenants.user_id,
+          first_name: leaseData.tenants.first_name,
+          last_name: leaseData.tenants.last_name,
+          email: leaseData.tenants.email,
+          phone: leaseData.tenants.phone,
+          lease: leaseData as ExtendedLease
+        })
+      }
+    } catch (error: any) {
+      console.error('Error fetching property details:', error)
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de charger les détails du bien",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [propertyId, router, supabase, toast])
+
+  useEffect(() => {
+    fetchPropertyDetails()
+  }, [fetchPropertyDetails])
+
+  const handleRemoveTenant = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      if (!currentTenant) {
+        toast({
+          title: "Erreur",
+          description: "Aucun locataire à supprimer",
+          variant: "destructive"
+        })
+        return
+      }
+
+      const { error: leaseError } = await supabase
+        .from('leases')
+        .delete()
+        .eq('id', currentTenant.lease.id)
+        .eq('user_id', session.user.id)
+
+      if (leaseError) throw leaseError
+
+      // Mettre à jour le statut de la propriété
+      const { error: propertyError } = await supabase
+        .from('properties')
+        .update({ status: 'vacant' })
+        .eq('id', propertyId)
+        .eq('user_id', session.user.id)
+
+      if (propertyError) throw propertyError
+
+      toast({
+        title: "Locataire retiré",
+        description: "Le locataire a été retiré avec succès"
+      })
+
+      fetchPropertyDetails()
+    } catch (error: any) {
+      console.error('Error removing tenant:', error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de retirer le locataire",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleDuplicateTransaction = (transaction: any) => {
+    setTransactionToClone(transaction)
+    setIsModalOpen(true)
+  }
+
+  const handleLeaseUpdated = async () => {
+    await fetchPropertyDetails()
+  }
+
+  const handlePropertyUpdated = async () => {
+    await fetchPropertyDetails()
+  }
+
+  const handleModalClose = (saved?: boolean) => {
+    setIsModalOpen(false)
+    if (saved) {
+      fetchPropertyDetails()
+      setRefreshTrigger(prev => prev + 1)
+    }
+  }
+
+  return (
+    <PageTransition className="container py-10">
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <LoadingSpinner size={40} />
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* Header avec actions */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <h1 className="text-3xl font-bold text-gray-800">{property?.name}</h1>
+              <p className="text-gray-500 mt-1">{property?.address}</p>
+            </motion.div>
+            
+            <motion.div 
+              className="flex flex-wrap gap-2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-4 w-4 mr-2" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                Modifier
+              </Button>
+              <Button onClick={() => setIsModalOpen(true)}>
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-4 w-4 mr-2" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Ajouter une transaction
+              </Button>
+            </motion.div>
+          </div>
+
+          {/* Tabs pour organiser le contenu */}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="mb-6">
+              <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+              <TabsTrigger value="transactions">Transactions</TabsTrigger>
+              <TabsTrigger value="financial">Emprunts</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+              {property?.category === 'Bien locatif' && (
+                <TabsTrigger value="rental">Location</TabsTrigger>
+              )}
+            </TabsList>
+            
+            {/* Tab: Vue d'ensemble */}
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Informations générales */}
+                <AnimatedCard delay={0.1}>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Informations générales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Type</p>
+                        <p className="mt-1">{property?.type}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Catégorie</p>
+                        <p className="mt-1">{property?.category}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Surface</p>
+                        <p className="mt-1">{property?.surface} m²</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Pièces</p>
+                        <p className="mt-1">{property?.rooms}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Étage</p>
+                        <p className="mt-1">{property?.floor || 'Non spécifié'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Année de construction</p>
+                        <p className="mt-1">{property?.year_built || 'Non spécifié'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </AnimatedCard>
+
+                {/* Photo du bien */}
+                <AnimatedCard delay={0.2}>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Photo</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex justify-center items-center h-[200px] bg-gray-100 rounded-md overflow-hidden">
+                    {property?.image_url ? (
+                      <img 
+                        src={property.image_url} 
+                        alt={property.name || 'Image du bien'} 
+                        className="object-cover w-full h-full"
+                      />
+                    ) : (
+                      <div className="text-center text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <p>Aucune photo disponible</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </AnimatedCard>
+              </div>
+
+              {/* Résumé financier */}
+              <AnimatedCard delay={0.3}>
+                <CardHeader className="pb-2">
+                  <CardTitle>Résumé financier</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-500">Prix d'achat</p>
+                      <p className="text-xl font-semibold mt-1">{formatCurrency(property?.purchase_price || 0)}</p>
+                      {property?.purchase_date && (
+                        <p className="text-xs text-gray-500 mt-1">Acheté le {new Date(property.purchase_date).toLocaleDateString('fr-FR')}</p>
+                      )}
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-500">Taxe foncière</p>
+                      <p className="text-xl font-semibold mt-1">{formatCurrency(property?.property_tax || 0)}</p>
+                      <p className="text-xs text-gray-500 mt-1">Annuelle</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-500">Assurance</p>
+                      <p className="text-xl font-semibold mt-1">{formatCurrency(property?.insurance_cost || 0)}</p>
+                      <p className="text-xs text-gray-500 mt-1">Annuelle</p>
+                    </div>
+                    {property?.category === 'Bien locatif' && (
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <p className="text-sm font-medium text-gray-500">Loyer</p>
+                        <p className="text-xl font-semibold mt-1">{formatCurrency(property?.rent_amount || 0)}</p>
+                        <p className="text-xs text-gray-500 mt-1">Mensuel</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </AnimatedCard>
+            </TabsContent>
+            
+            {/* Tab: Transactions */}
+            <TabsContent value="transactions" className="space-y-6">
+              {/* Transactions */}
+              <PropertyTransactions 
+                propertyId={propertyId || ''}
+                onAddTransaction={() => setIsModalOpen(true)}
+                onDuplicateTransaction={handleDuplicateTransaction}
+                refreshTrigger={refreshTrigger}
+              />
+            </TabsContent>
+            
+            {/* Tab: Emprunts */}
+            <TabsContent value="financial" className="space-y-6">
+              {/* Emprunts */}
+              <PropertyLoans propertyId={propertyId || ''} />
+            </TabsContent>
+            
+            {/* Tab: Documents */}
+            <TabsContent value="documents">
+              <PropertyDocuments propertyId={propertyId || ''} />
+            </TabsContent>
+            
+            {/* Tab: Location (conditionnelle) */}
+            {property?.category === 'Bien locatif' && (
+              <TabsContent value="rental">
+                <AnimatedCard>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Informations de location</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {currentTenant ? (
+                      <>
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold">Locataire actuel</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Nom</p>
+                              <p className="mt-1">{currentTenant.first_name} {currentTenant.last_name}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Contact</p>
+                              <p className="mt-1">
+                                <a href={`mailto:${currentTenant.email}`} className="text-blue-600 hover:underline">{currentTenant.email}</a>
+                              </p>
+                              <p className="mt-1">
+                                <a href={`tel:${currentTenant.phone}`} className="text-blue-600 hover:underline">{currentTenant.phone}</a>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold">Bail en cours</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Début du bail</p>
+                              <p className="mt-1">{new Date(currentTenant.lease.start_date).toLocaleDateString('fr-FR')}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Durée</p>
+                              <p className="mt-1">{currentTenant.lease.duration} mois</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Loyer mensuel</p>
+                              <p className="mt-1">{formatCurrency(currentTenant.lease.rent_amount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">Dépôt de garantie</p>
+                              <p className="mt-1">{formatCurrency(currentTenant.lease.deposit_amount)}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                            <Button variant="outline" size="sm" onClick={() => router.push(`/tenants/new?propertyId=${propertyId}`)}>
+                              Changer de locataire
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setIsLeaseModalOpen(true)}>
+                              Modifier le bail
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleRemoveTenant}>
+                              Retirer le locataire
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-center py-8">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          <p className="text-gray-500 mb-4">
+                            Ce bien n'est pas loué actuellement.
+                          </p>
+                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <Button onClick={() => router.push(`/tenants/new?propertyId=${propertyId}`)}>
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                className="h-4 w-4 mr-2" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 012 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                              </svg>
+                              Ajouter un locataire
+                            </Button>
+                          </motion.div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </AnimatedCard>
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
+      )}
+
+      {/* Modals */}
+      <PropertyModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        property={property}
+        onPropertyUpdated={handlePropertyUpdated}
+      />
+      
+      <TransactionModal 
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        propertyId={propertyId || ''}
+        transactionToClone={transactionToClone}
+        setTransactionToClone={setTransactionToClone}
+      />
+      
+      {currentTenant && (
+        <LeaseModal
+          isOpen={isLeaseModalOpen}
+          onClose={() => setIsLeaseModalOpen(false)}
+          propertyId={propertyId || ''}
+          tenantId={currentTenant.id || ''}
+          lease={currentTenant.lease}
+          onLeaseUpdated={handleLeaseUpdated}
+        />
+      )}
+    </PageTransition>
+  )
+}

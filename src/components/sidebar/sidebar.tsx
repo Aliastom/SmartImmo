@@ -1,0 +1,66 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+
+const navigation = [
+  { name: 'Tableau de bord', href: '/dashboard', icon: '📊' },
+  { name: 'Biens', href: '/properties', icon: '🏠' },
+  { name: 'Locataires', href: '/tenants', icon: '👥' },
+  { name: 'Transactions', href: '/transactions', icon: '💰' },
+  { name: 'Impôts', href: '/impots', icon: '📝' },
+]
+
+export function Sidebar() {
+  const pathname = usePathname()
+  const supabase = createClientComponentClient()
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+  }
+
+  return (
+    <div className="flex h-full w-64 flex-col bg-gray-900">
+      <div className="flex h-16 shrink-0 items-center px-6">
+        <span className="text-xl font-bold text-white">GestionImmo</span>
+      </div>
+      <nav className="flex flex-1 flex-col">
+        <ul role="list" className="flex flex-1 flex-col gap-y-7 px-6">
+          <li>
+            <ul role="list" className="-mx-2 space-y-1">
+              {navigation.map((item) => (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      pathname === item.href
+                        ? 'bg-gray-800 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                    )}
+                  >
+                    <span className="h-6 w-6 shrink-0 text-center">{item.icon}</span>
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </li>
+          <li className="mt-auto">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-gray-400 hover:text-white"
+              onClick={handleSignOut}
+            >
+              <span className="h-6 w-6 shrink-0 text-center">👋</span>
+              <span className="ml-3">Se déconnecter</span>
+            </Button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  )
+}

@@ -60,6 +60,7 @@ interface ExtendedLease {
   duration: number;
   rent_amount: number;
   deposit_amount: number;
+  end_date?: string;
 }
 
 // Type pour le locataire avec le bail
@@ -477,6 +478,29 @@ export default function ClientPage({ id }: ClientPageProps) {
                             <div>
                               <p className="text-sm font-medium text-gray-500">Dépôt de garantie</p>
                               <p className="mt-1">{formatCurrency(currentTenant.lease.deposit_amount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">FIN DU BAIL</p>
+                              <p className="mt-1">
+                                {currentTenant.lease.end_date
+                                  ? new Date(currentTenant.lease.end_date).toLocaleDateString('fr-FR')
+                                  : 'Non spécifiée'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-500">FIN DU BAIL (calculée)</p>
+                              <p className="mt-1">
+                                {(() => {
+                                  const start = new Date(currentTenant.lease.start_date || currentTenant.lease.lease_start);
+                                  const months = Number(currentTenant.lease.duration || currentTenant.lease.duration_months);
+                                  if (!isNaN(start.getTime()) && !isNaN(months)) {
+                                    const calc = new Date(start);
+                                    calc.setMonth(calc.getMonth() + months);
+                                    return calc.toLocaleDateString('fr-FR');
+                                  }
+                                  return 'Non spécifiée';
+                                })()}
+                              </p>
                             </div>
                           </div>
                           <div className="mt-4 flex flex-col sm:flex-row gap-2">

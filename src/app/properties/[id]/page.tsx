@@ -130,6 +130,7 @@ export default function PropertyDetailPage() {
             rent: leaseData.rent,
             lease_start: leaseData.lease_start,
             lease_end: leaseData.lease_end,
+            duration_months: leaseData.duration_months,
             created_at: leaseData.created_at,
             updated_at: leaseData.updated_at
           }
@@ -269,8 +270,8 @@ export default function PropertyDetailPage() {
     setIsModalOpen(true)
   }
 
-  const handleLeaseUpdated = () => {
-    setRefreshTrigger(prev => prev + 1)
+  const handleLeaseUpdated = async () => {
+    await fetchPropertyDetails(); // recharge la propriété ET le bail à jour
   }
 
   const handlePropertyUpdated = () => {
@@ -651,12 +652,35 @@ export default function PropertyDetailPage() {
                                 <td className="p-3 text-sm font-medium text-gray-500 uppercase">
                                   <div className="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <span>Loyer</span>
+                                    <span>Fin du bail (calculée)</span>
                                   </div>
                                 </td>
-                                <td className="p-3">{currentTenant.lease?.rent ? formatCurrency(currentTenant.lease.rent) : 'Non spécifié'}</td>
+                                <td className="p-3">
+                                  {(() => {
+                                    const lease = currentTenant.lease || {};
+                                    const start = new Date(lease.lease_start || lease.start_date);
+                                    const months = Number(lease.duration_months || lease.duration);
+                                    if (!isNaN(start.getTime()) && !isNaN(months)) {
+                                      const calc = new Date(start);
+                                      calc.setMonth(calc.getMonth() + months);
+                                      return calc.toLocaleDateString('fr-FR');
+                                    }
+                                    return 'Non spécifiée';
+                                  })()}
+                                </td>
+                              </tr>
+                              <tr className="border-b hover:bg-gray-50">
+                                <td className="p-3 text-sm font-medium text-gray-500 uppercase">
+                                  <div className="flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                  </svg>
+                                  <span>Loyer</span>
+                                </div>
+                              </td>
+                              <td className="p-3">{currentTenant.lease?.rent ? formatCurrency(currentTenant.lease.rent) : 'Non spécifié'}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -779,11 +803,12 @@ export default function PropertyDetailPage() {
       
       {currentTenant && (
         <LeaseModal
+          key={currentTenant?.lease?.id || 'new'}
           isOpen={isLeaseModalOpen}
           onClose={() => setIsLeaseModalOpen(false)}
           propertyId={propertyId}
-          tenantId={currentTenant.id}
-          lease={currentTenant.lease}
+          tenantId={currentTenant?.id}
+          lease={currentTenant?.lease}
           onLeaseUpdated={handleLeaseUpdated}
         />
       )}

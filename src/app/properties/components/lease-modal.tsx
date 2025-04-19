@@ -32,6 +32,7 @@ type Lease = Database['public']['Tables']['leases']['Row']
 export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLeaseUpdated }: LeaseModalProps) {
   const [formData, setFormData] = useState({
     lease_start: new Date().toISOString().split('T')[0],
+    duration_months: 12,
     lease_end: "",
     rent: 0
   })
@@ -44,6 +45,7 @@ export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLea
     if (lease) {
       setFormData({
         lease_start: lease.lease_start,
+        duration_months: lease.duration_months || 12,
         lease_end: lease.lease_end || "",
         rent: lease.rent
       })
@@ -73,9 +75,26 @@ export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLea
     }
   }, [isOpen, propertyId, lease]);
 
+  // Calcul automatique de la date de fin si date d'entrée ou durée changent
+  useEffect(() => {
+    if (formData.lease_start && formData.duration_months && !lease) {
+      const start = new Date(formData.lease_start)
+      if (!isNaN(start.getTime())) {
+        const end = new Date(start)
+        end.setMonth(end.getMonth() + Number(formData.duration_months))
+        // Format YYYY-MM-DD
+        const lease_end_auto = end.toISOString().split('T')[0]
+        setFormData(prev => prev.lease_end === lease_end_auto ? prev : { ...prev, lease_end: lease_end_auto })
+      }
+    }
+  }, [formData.lease_start, formData.duration_months, lease])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
+    // Log du formData pour debug
+    console.log('formData envoyé :', formData)
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -105,13 +124,21 @@ export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLea
           .from('leases')
           .update({
             lease_start: formData.lease_start,
-            lease_end: formData.lease_end || null,
+            duration_months: formData.duration_months,
+            lease_end: formData.lease_end && formData.lease_end !== "" ? formData.lease_end : null,
             rent: formData.rent
           })
           .eq('id', lease.id)
           .eq('user_id', session.user.id)
 
+        if (updateError) {
+          console.error('Erreur supabase update:', updateError)
+        }
+
         if (updateError) throw updateError
+
+        debugger; // Stoppe l'exécution ici pour permettre de lire les logs
+
       } else {
         // Mode création - ne devrait pas arriver ici normalement
         toast({
@@ -213,7 +240,28 @@ export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLea
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span>Fin du bail (optionnel)</span>
+                      <span>Durée (mois)</span>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <Input
+                      id="duration_months"
+                      type="number"
+                      min={1}
+                      value={formData.duration_months}
+                      onChange={(e) => setFormData(prev => ({ ...prev, duration_months: Number(e.target.value) }))}
+                      required
+                      className="border-0 shadow-none focus-visible:ring-0 h-10"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase">
+                    <div className="flex items-center space-x-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>Fin du bail (modif. possible)</span>
                     </div>
                   </td>
                   <td className="p-3">
@@ -224,6 +272,43 @@ export function LeaseModal({ isOpen, onClose, propertyId, tenantId, lease, onLea
                       onChange={(e) => setFormData(prev => ({ ...prev, lease_end: e.target.value }))}
                       className="border-0 shadow-none focus-visible:ring-0 h-10"
                     />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Affichage synthétique sous le formulaire */}
+          <div className="mt-4 mb-2">
+            <table className="w-full text-sm">
+              <tbody>
+                <tr>
+                  <td className="bg-gray-50 p-2 text-gray-500 uppercase font-medium w-1/3">Début du bail</td>
+                  <td className="p-2">{formData.lease_start}</td>
+                </tr>
+                <tr>
+                  <td className="bg-gray-50 p-2 text-gray-500 uppercase font-medium">Durée</td>
+                  <td className="p-2">{formData.duration_months} mois</td>
+                </tr>
+                <tr>
+                  <td className="bg-gray-50 p-2 text-gray-500 uppercase font-medium">Fin du bail</td>
+                  <td className="p-2">
+                    {(() => {
+                      const start = new Date(formData.lease_start)
+                      let calcEnd = ''
+                      if (formData.lease_start && formData.duration_months) {
+                        const end = new Date(start)
+                        end.setMonth(end.getMonth() + Number(formData.duration_months))
+                        calcEnd = end.toISOString().split('T')[0]
+                      }
+                      if (formData.lease_end && formData.lease_end !== calcEnd) {
+                        return `${formData.lease_end} (saisie manuelle)`
+                      } else if (calcEnd) {
+                        return `${calcEnd} (calculée)`
+                      } else {
+                        return '-'
+                      }
+                    })()}
                   </td>
                 </tr>
               </tbody>

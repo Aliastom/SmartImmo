@@ -2,6 +2,7 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Button } from '@/components/ui/button'
+import { SmartImmoLogo } from '@/components/ui/logo';
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion';
@@ -66,9 +67,9 @@ export default function AuthPage() {
             initial={{ scale: 0.7, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            className="bg-blue-100 rounded-full p-3 mb-4 shadow-md"
+            className="mb-4"
           >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M16 3v4"/><path d="M8 3v4"/></svg>
+            <SmartImmoLogo size="lg" />
           </motion.div>
           <h2 className="text-3xl font-extrabold text-gray-900 text-center">Bienvenue sur <span className="text-blue-700">GestionImmo</span></h2>
           <p className="mt-2 text-center text-base text-gray-600">Connecte-toi pour gérer tes biens en toute simplicité.</p>

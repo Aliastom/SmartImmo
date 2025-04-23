@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const { signIn } = useAuth()
@@ -47,9 +48,9 @@ export default function LoginPage() {
             initial={{ scale: 0.7, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            className="bg-blue-100 rounded-full p-3 mb-4 shadow-md"
+            className="mb-4"
           >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M16 3v4"/><path d="M8 3v4"/></svg>
+            <Image src="/images/logo_mobile.png" alt="SmartImmo Logo" width={64} height={64} priority className="rounded-xl shadow-md" />
           </motion.div>
           <h2 className="text-3xl font-extrabold text-gray-900 text-center">Bienvenue sur <span className="text-blue-700">SmartImmo</span></h2>
           <p className="mt-2 text-center text-base text-gray-600">Connecte-toi à ton espace pour accéder à ton tableau de bord.</p>

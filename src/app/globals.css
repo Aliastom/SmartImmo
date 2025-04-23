@@ -112,6 +112,24 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Masque tous les overlays/portails Next.js (watermark, etc.) même si la classe change */
+body > div[style*="z-index: 2147483647"],
+body > div[data-nextjs-portal] {
+  display: none !important;
+}
+
+/* Masque le watermark Next.js SVG en dev */
+svg[data-next-mark-loading] {
+  display: none !important;
+}
+
+/* Masque le bouton watermark Next.js DevTools et le svg watermark */
+nextjs-portal [data-next-mark="true"],
+nextjs-portal [data-next-mark="true"] svg,
+nextjs-portal [data-next-mark-loading] {
+  display: none !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

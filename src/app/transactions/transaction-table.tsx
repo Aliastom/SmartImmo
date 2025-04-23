@@ -18,9 +18,13 @@ import { motion } from 'framer-motion'
 interface TransactionTableProps {
   searchQuery: string
   filterType: string
+  filterCategory: string
+  filterProperty: string
+  filterMonth: string
   onEdit: (id: string) => void
   onDuplicate: (transaction: Transaction) => void
   refreshTrigger: number
+  onTransactionsLoaded?: (transactions: Transaction[]) => void
 }
 
 interface Transaction {
@@ -35,13 +39,18 @@ interface Transaction {
   property: {
     name: string
   } | null
+  attachments_count: { count: number }[]
+  transaction_type: string
+  created_at?: string
 }
 
-export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate, refreshTrigger }: TransactionTableProps) {
+export function TransactionTable({ searchQuery, filterType, filterCategory, filterProperty, filterMonth, onEdit, onDuplicate, refreshTrigger, onTransactionsLoaded }: TransactionTableProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [categories, setCategories] = useState<{ id: string, name: string }[]>([]);
+  const [types, setTypes] = useState<{ id: string, name: string }[]>([]);
   const { toast } = useToast()
   const supabase = createClientComponentClient<Database>()
 
@@ -57,6 +66,34 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
     return () => {
       window.removeEventListener('resize', checkIfMobile)
     }
+  }, [])
+
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const supabase = createClientComponentClient<Database>()
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name')
+          .eq('active', true)
+        if (!error && data) setCategories(data)
+      } catch (e) {}
+    }
+    fetchCategories()
+  }, [])
+
+  useEffect(() => {
+    async function fetchTypes() {
+      try {
+        const supabase = createClientComponentClient<Database>()
+        const { data, error } = await supabase
+          .from('types')
+          .select('id, name')
+          .eq('active', true)
+        if (!error && data) setTypes(data)
+      } catch (e) {}
+    }
+    fetchTypes()
   }, [])
 
   const loadTransactions = async () => {
@@ -75,7 +112,8 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
         .from('transactions')
         .select(`
           *,
-          property:properties(name)
+          property:properties(name),
+          attachments_count:transaction_documents(count)
         `)
         .eq('user_id', session.user.id)
         .order('date', { ascending: false })
@@ -83,7 +121,15 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
       if (filterType !== 'all') {
         query = query.eq('type', filterType)
       }
-
+      if (filterCategory !== 'all') {
+        query = query.eq('category', filterCategory)
+      }
+      if (filterProperty !== 'all') {
+        query = query.eq('property_id', filterProperty)
+      }
+      if (filterMonth) {
+        query = query.eq('accounting_month', filterMonth)
+      }
       if (searchQuery) {
         query = query.or(`description.ilike.%${searchQuery}%,property.name.ilike.%${searchQuery}%`)
       }
@@ -178,18 +224,14 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
   
   useEffect(() => {
     loadTransactions()
-  }, [refreshTrigger, filterType, searchQuery])
-  
-  const formatAmount = (amount: number, type: string) => {
-    const formattedAmount = new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount)
-    return type === 'income' ? `+${formattedAmount}` : `-${formattedAmount}`
-  }
-  
+  }, [refreshTrigger, filterType, filterCategory, filterProperty, filterMonth, searchQuery])
+
+  useEffect(() => {
+    if (onTransactionsLoaded) {
+      onTransactionsLoaded(transactions);
+    }
+  }, [transactions, onTransactionsLoaded]);
+
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('fr-FR')
   }
@@ -200,17 +242,21 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
   }
   
-  const getCategoryLabel = (category: string) => {
-    const categories: Record<string, string> = {
-      'rent': 'Loyer',
-      'maintenance': 'Entretien',
-      'tax': 'Taxes',
-      'insurance': 'Assurance',
-      'utility': 'Charges',
-      'other': 'Autre'
-    }
-    return categories[category] || category
+  const getCategoryLabelById = (categoryId: string) => {
+    return categories.find(cat => cat.id === categoryId)?.name || categoryId;
   }
+
+  const getTypeLabelById = (typeId: string) => {
+    return types.find(t => t.id === typeId)?.name || typeId;
+  }
+
+  // Classement par date d'ajout DESC (plus récent en haut), stricte sur created_at si dispo
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    if (a.created_at && b.created_at) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 
   // Rendu mobile avec cartes au lieu de tableau
   if (isMobile) {
@@ -218,10 +264,10 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
       <div className="space-y-4">
         {isLoading ? (
           <div className="text-center p-4">Chargement...</div>
-        ) : transactions.length === 0 ? (
+        ) : sortedTransactions.length === 0 ? (
           <div className="text-center p-4 text-gray-500">Aucune transaction trouvée</div>
         ) : (
-          transactions.map((transaction) => (
+          sortedTransactions.map((transaction) => (
             <motion.div
               key={transaction.id}
               initial={{ opacity: 0, y: 20 }}
@@ -231,12 +277,14 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <div className="text-sm text-gray-500">{formatDate(transaction.date)}</div>
-                  <div className="font-medium">{getCategoryLabel(transaction.category)}</div>
+                  <div className="font-medium">{getCategoryLabelById(transaction.category)}</div>
+                  <div className="text-sm text-gray-500">{getTypeLabelById(transaction.type)}</div>
                 </div>
                 <div className={`font-medium ${
-                  transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                  transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {formatAmount(transaction.amount, transaction.type)}
+                  {transaction.transaction_type === 'income' ? '+' : '-'}
+                  {Math.abs(Number(transaction.amount)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €
                 </div>
               </div>
               
@@ -258,9 +306,9 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
                   className="hover:bg-gray-100"
                   onClick={() => onEdit(transaction.id)}
                 >
+                  {/* Icône crayon identique à property-transactions */}
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </Button>
                 <Button 
@@ -269,8 +317,9 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
                   className="hover:bg-gray-100"
                   onClick={() => onDuplicate(transaction)}
                 >
+                  {/* Icône double-carré (dupliquer) */}
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </Button>
                 <Button 
@@ -300,9 +349,11 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
           <TableRow>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Date</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Catégorie</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Type</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Bien</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Mois comptable</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">Montant</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">Pièces jointes</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">
               <div className="flex items-center space-x-2 justify-end">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -314,23 +365,31 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.length === 0 ? (
+          {sortedTransactions.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-gray-500">
+              <TableCell colSpan={8} className="text-center text-gray-500">
                 Aucune transaction trouvée
               </TableCell>
             </TableRow>
           ) : (
-            transactions.map((transaction) => (
+            sortedTransactions.map((transaction) => (
               <TableRow key={transaction.id}>
                 <TableCell>{formatDate(transaction.date)}</TableCell>
-                <TableCell>{getCategoryLabel(transaction.category)}</TableCell>
+                <TableCell>{getCategoryLabelById(transaction.category)}</TableCell>
+                <TableCell>{getTypeLabelById(transaction.type)}</TableCell>
                 <TableCell>{transaction.property?.name || 'N/A'}</TableCell>
                 <TableCell>{formatAccountingMonth(transaction.accounting_month)}</TableCell>
                 <TableCell className={`text-right font-medium ${
-                  transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                  transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {formatAmount(transaction.amount, transaction.type)}
+                  {transaction.transaction_type === 'income' ? '+' : '-'}
+                  {Math.abs(Number(transaction.amount)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €
+                </TableCell>
+                <TableCell className="text-right">
+                  {/* Badge nombre de PJ */}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${transaction.attachments_count?.[0]?.count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+                    {transaction.attachments_count?.[0]?.count || 0}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end space-x-2">
@@ -340,9 +399,9 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
                       className="hover:bg-gray-100"
                       onClick={() => onEdit(transaction.id)}
                     >
+                      {/* Icône crayon identique à property-transactions */}
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </Button>
                     <Button 
@@ -351,8 +410,9 @@ export function TransactionTable({ searchQuery, filterType, onEdit, onDuplicate,
                       className="hover:bg-gray-100"
                       onClick={() => onDuplicate(transaction)}
                     >
+                      {/* Icône double-carré (dupliquer) */}
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     </Button>
                     <Button 

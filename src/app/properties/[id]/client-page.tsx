@@ -246,6 +246,39 @@ export default function ClientPage({ id }: ClientPageProps) {
     }
   }
 
+  // Ajout : Totaux dynamiques pour l'onglet Transactions
+  const [totalIncome, setTotalIncome] = useState(0)
+  const [totalExpense, setTotalExpense] = useState(0)
+  const [balance, setBalance] = useState(0)
+
+  const fetchPropertyTransactionsTotals = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount, transaction_type')
+        .eq('user_id', session.user.id)
+        .eq('property_id', propertyId)
+      if (error) throw error
+      const income = (data || []).filter(t => t.transaction_type === 'income').reduce((sum, t) => sum + Number(t.amount), 0)
+      const expense = (data || []).filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0)
+      setTotalIncome(income)
+      setTotalExpense(expense)
+      setBalance(income - expense)
+    } catch (e) {
+      setTotalIncome(0)
+      setTotalExpense(0)
+      setBalance(0)
+    }
+  }, [propertyId, supabase])
+
+  useEffect(() => {
+    if (propertyId) {
+      fetchPropertyTransactionsTotals()
+    }
+  }, [propertyId, refreshTrigger])
+
   return (
     <PageTransition className="container py-10">
       {isLoading ? (
@@ -534,7 +567,7 @@ export default function ClientPage({ id }: ClientPageProps) {
                                 viewBox="0 0 24 24" 
                                 stroke="currentColor"
                               >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 012 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0H6" />
                               </svg>
                               Ajouter un locataire
                             </Button>

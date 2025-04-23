@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -9,9 +9,10 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
 import { useToast } from "@/components/ui/use-toast"
 import { Textarea } from "@/components/ui/textarea"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { motion } from 'framer-motion'
 import { useParams } from 'next/navigation';
+import TransactionFormFields from './components/TransactionFormFields';
 
 interface TransactionModalProps {
   isOpen: boolean
@@ -38,8 +39,9 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
   
   const [formData, setFormData] = useState({
     property_id: '',
-    type: 'income',
+    transaction_type: '', // 'income' ou 'expense'
     category: '',
+    type: '', // type lié à la catégorie
     amount: '',
     date: today,
     accounting_month: currentMonth,
@@ -47,144 +49,73 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
   })
   const { toast } = useToast()
 
-  // Fonction pour préremplir le montant en fonction de la propriété et de la catégorie
-  const prefillAmount = async (propertyId: string, category: string, type: string) => {
-    if (!propertyId || !category) return
+  const [categories, setCategories] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-    console.log("prefillAmount appelé avec:", { propertyId, category, type })
+  const [formInitialized, setFormInitialized] = useState(false);
 
-    // Si la catégorie est "loyer" et le type est "income", préremplir directement avec le loyer de la propriété
-    if (type === 'income' && category === 'loyer') {
+  useEffect(() => {
+    setFormInitialized(false);
+  }, [isOpen, transactionId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchCategoriesAndTypes = async () => {
+      setFetchError(null);
       try {
-        // Récupérer les détails de la propriété
-        const { data: property, error } = await supabase
-          .from('properties')
-          .select('rent')
-          .eq('id', propertyId)
-          .single()
-
-        if (error) {
-          console.error('Erreur lors de la récupération des détails de la propriété:', error)
-          return
+        const { data: categoriesData, error: catError } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('active', true);
+        if (catError) throw catError;
+        setCategories(categoriesData || []);
+        if (categoriesData && categoriesData.length > 0) {
+          // Charger les types pour la première catégorie par défaut
+          const firstCategoryId = categoriesData[0].id;
+          const { data: typesData, error: typeError } = await supabase
+            .from('types')
+            .select('*')
+            .eq('active', true)
+            .eq('category_id', firstCategoryId);
+          if (typeError) throw typeError;
+          setTypes(typesData || []);
+        } else {
+          setTypes([]);
         }
-
-        if (!property) {
-          console.log("Propriété non trouvée")
-          return
-        }
-
-        console.log("Propriété récupérée:", property)
-
-        // Pour les revenus de type loyer, utiliser le montant du loyer de la propriété
-        const amount = property.rent?.toString() || '0'
-        console.log("Montant du loyer trouvé:", amount)
-
-        // Mettre à jour le montant dans le formulaire immédiatement
-        setFormData(prev => {
-          console.log("Mise à jour du montant dans le formulaire:", amount)
-          return {
-            ...prev,
-            amount
-          }
-        })
-      } catch (error) {
-        console.error('Erreur lors du préremplissage du montant du loyer:', error)
+      } catch (err: any) {
+        setFetchError("Erreur lors du chargement des catégories ou types.");
+        setCategories([]);
+        setTypes([]);
       }
-      return
-    }
+    };
+    fetchCategoriesAndTypes();
+  }, [isOpen, supabase]);
 
-    // Pour les autres catégories, utiliser la logique existante
+  // Correction du handleCategoryChange pour sélectionner automatiquement le premier type disponible
+  const handleCategoryChange = async (categoryId: string) => {
+    setFormData(prev => ({ ...prev, category: categoryId, type: '' }));
+    setFetchError(null);
     try {
-      // Récupérer les détails de la propriété
-      const { data: property, error } = await supabase
-        .from('properties')
+      const { data: typesData, error: typeError } = await supabase
+        .from('types')
         .select('*')
-        .eq('id', propertyId)
-        .single()
-
-      if (error) {
-        console.error('Erreur lors de la récupération des détails de la propriété:', error)
-        return
+        .eq('active', true)
+        .eq('category_id', categoryId);
+      if (typeError) throw typeError;
+      setTypes(typesData || []);
+      // Sélection auto du premier type
+      if (typesData && typesData.length > 0) {
+        setFormData(prev => ({ ...prev, type: typesData[0].id }));
+      } else {
+        setFormData(prev => ({ ...prev, type: '' }));
       }
-
-      if (!property) {
-        console.log("Propriété non trouvée")
-        return
-      }
-
-      console.log("Propriété récupérée:", property)
-
-      let amount = '0' // Valeur par défaut à 0 pour toutes les catégories
-
-      // Préremplir en fonction de la catégorie et du type
-      if (type === 'expense') {
-        // Pour les dépenses, utiliser les montants des charges récurrentes
-        switch (category) {
-          case 'taxe_fonciere':
-            amount = property.property_tax?.toString() || '0'
-            break
-          case 'assurance':
-            amount = property.insurance?.toString() || '0'
-            break
-          case 'frais_gestion':
-            // Calculer les frais de gestion en fonction du pourcentage
-            if (property.rent && property.management_fee_percentage) {
-              const managementFee = (property.rent * property.management_fee_percentage) / 100
-              amount = managementFee.toFixed(2)
-            }
-            break
-          default:
-            // Pour les autres catégories, on garde la valeur par défaut '0'
-            break
-        }
-      }
-
-      console.log("Montant calculé:", amount)
-
-      // Mettre à jour le montant dans le formulaire
-      setFormData(prev => {
-        console.log("Mise à jour du montant dans le formulaire:", amount)
-        return {
-          ...prev,
-          amount
-        }
-      })
-    } catch (error) {
-      console.error('Erreur lors du préremplissage du montant:', error)
+    } catch (err: any) {
+      setFetchError("Erreur lors du chargement des types.");
+      setTypes([]);
+      setFormData(prev => ({ ...prev, type: '' }));
     }
-  }
-
-  // Fonction spécifique pour préremplir le montant du loyer
-  const prefillRent = async (propertyId: string) => {
-    if (!propertyId) return
-    
-    try {
-      // Récupérer directement le loyer de la propriété sélectionnée
-      const { data, error } = await supabase
-        .from('properties')
-        .select('rent')
-        .eq('id', propertyId)
-        .single()
-        
-      if (error) {
-        console.error('Erreur lors de la récupération du loyer:', error)
-        return
-      }
-      
-      if (data) {
-        const rent = data.rent || 0
-        console.log('Loyer trouvé:', rent)
-        
-        // Mettre à jour directement le montant avec le loyer
-        setFormData(prev => ({
-          ...prev,
-          amount: rent.toString()
-        }))
-      }
-    } catch (error) {
-      console.error('Erreur lors du préremplissage du loyer:', error)
-    }
-  }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -215,36 +146,17 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
           // If we have a transactionId, fetch the transaction
           if (transactionId) {
             fetchTransaction()
-          } else if (transactionToClone) {
-            // If we have a transaction to clone, set the form data
-            setFormData({
-              property_id: transactionToClone.property_id || (propertyId || ''),
-              type: transactionToClone.type || 'income',
-              category: transactionToClone.category || '',
-              amount: transactionToClone.amount?.toString() || '',
-              date: today,
-              accounting_month: currentMonth,
-              description: transactionToClone.description || ''
-            })
           } else if (propertyId) {
             setFormData(prev => ({
               ...prev,
               property_id: propertyId
             }))
-            // Préremplir le loyer si la catégorie est déjà "loyer"
-            if (formData.category === 'loyer') {
-              prefillRent(propertyId)
-            }
           } else if (propertiesData && propertiesData.length > 0 && !formData.property_id) {
             // Sélectionner la première propriété par défaut
             setFormData(prev => ({
               ...prev,
               property_id: propertiesData[0].id
             }))
-            // Préremplir le loyer si la catégorie est déjà "loyer"
-            if (formData.category === 'loyer') {
-              prefillRent(propertiesData[0].id)
-            }
           }
         } catch (error) {
           console.error('Erreur lors du chargement des propriétés:', error)
@@ -255,40 +167,6 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     }
   }, [isOpen, transactionId, transactionToClone, propertyId, supabase])
   
-  // Effet pour préremplir le montant lorsque la catégorie change
-  useEffect(() => {
-    if (formData.property_id && formData.category) {
-      prefillAmount(formData.property_id, formData.category, formData.type)
-    }
-  }, [formData.category, formData.property_id, formData.type])
-
-  // Préremplir le montant avec le loyer du bien si la catégorie est "loyer" et le type "income"
-  useEffect(() => {
-    if (
-      isOpen &&
-      formData.property_id &&
-      formData.category === 'loyer' &&
-      formData.type === 'income'
-    ) {
-      (async () => {
-        const { data: property, error } = await supabase
-          .from('properties')
-          .select('rent')
-          .eq('id', formData.property_id)
-          .single()
-        if (!error && property && property.rent && Number(property.rent) > 0) {
-          setFormData(prev => ({ ...prev, amount: property.rent.toString() }))
-        } else if (!error && property && (!property.rent || Number(property.rent) <= 0)) {
-          toast({
-            title: "Erreur",
-            description: "Le bien sélectionné n'a pas de loyer défini. Merci de renseigner le loyer dans la fiche du bien avant d'associer un locataire.",
-            variant: "destructive"
-          })
-        }
-      })();
-    }
-  }, [isOpen, formData.property_id, formData.category, formData.type]);
-
   // Fetch transaction details when editing
   const fetchTransaction = async () => {
     if (!transactionId) return
@@ -310,8 +188,9 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
       if (data) {
         setFormData({
           property_id: data.property_id || '',
-          type: data.type || 'income',
+          transaction_type: data.transaction_type || '',
           category: data.category || '',
+          type: data.type || '',
           amount: data.amount?.toString() || '',
           date: data.date || today,
           accounting_month: data.accounting_month || currentMonth,
@@ -325,13 +204,259 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     }
   }
   
+  // --- Initialisation robuste du formulaire lors de l'édition ou de la duplication ---
+  useEffect(() => {
+    if (!isOpen || (!transactionId && !transactionToClone)) return;
+    let cancelled = false;
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        let baseTransaction = null;
+        // 1. Fetch transaction si édition, sinon utiliser transactionToClone
+        if (transactionId) {
+          const { data, error } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('id', transactionId)
+            .single();
+          if (error || !data) return;
+          baseTransaction = data;
+        } else if (transactionToClone) {
+          baseTransaction = transactionToClone;
+        }
+        if (!baseTransaction) return;
+        // 2. Charger les types pour la catégorie de la transaction
+        const { data: typesData } = await supabase
+          .from('types')
+          .select('*')
+          .eq('active', true)
+          .eq('category_id', baseTransaction.category);
+        // 3. Sélectionner le type s'il existe, sinon le premier
+        let typeId = '';
+        if (typesData && typesData.length > 0) {
+          typeId = typesData.some(t => t.id === baseTransaction.type)
+            ? baseTransaction.type
+            : typesData[0].id;
+        }
+        // 4. Préremplir le montant selon le type
+        let montant = '';
+        if (typeId) {
+          const selectedType = typesData.find(t => t.id === typeId);
+          const valeurPourPreRemplissage = selectedType?.name?.toLowerCase() || '';
+          const { data: property } = await supabase
+            .from('properties')
+            .select('*')
+            .eq('id', baseTransaction.property_id)
+            .single();
+          if (property) {
+            switch (valeurPourPreRemplissage) {
+              case 'loyer':
+                montant = property.rent?.toString() || '';
+                break;
+              case 'taxe foncière':
+              case 'taxe_fonciere':
+                montant = property.property_tax?.toString() || '';
+                break;
+              case 'taxe habitation':
+              case 'taxe_habitation':
+                montant = property.habitation_tax?.toString() || '';
+                break;
+              case 'assurance':
+                montant = property.insurance?.toString() || '';
+                break;
+              case 'frais de gestion':
+              case 'frais_gestion':
+                if (property.rent && property.management_fee_percentage) {
+                  const mgmt = (property.rent * property.management_fee_percentage) / 100;
+                  montant = mgmt.toFixed(2);
+                }
+                break;
+              default:
+                montant = '';
+            }
+          }
+        }
+        if (!cancelled) {
+          setTypes(typesData || []);
+          setFormData({
+            property_id: baseTransaction.property_id || (propertyId || ''),
+            transaction_type: baseTransaction.transaction_type || '',
+            category: baseTransaction.category || '',
+            type: typeId,
+            amount: montant || baseTransaction.amount?.toString() || '',
+            date: transactionId ? (baseTransaction.date || today) : today,
+            accounting_month: transactionId ? (baseTransaction.accounting_month || currentMonth) : currentMonth,
+            description: baseTransaction.description || ''
+          });
+          setFormInitialized(true);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, transactionId, transactionToClone]);
+  
+  useEffect(() => {
+    if (!isOpen) setFormInitialized(false);
+  }, [isOpen]);
+
+  // --- Attachments State ---
+  const [attachments, setAttachments] = useState<File[]>([])
+  const [existingAttachments, setExistingAttachments] = useState<any[]>([])
+  const attachmentsInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (transactionId && isOpen) {
+      (async () => {
+        setIsLoading(true)
+        try {
+          // Fetch all document_ids for the transaction
+          const { data: rels, error: relsError } = await supabase
+            .from('transaction_documents')
+            .select('document_id')
+            .eq('transaction_id', transactionId);
+          if (relsError) {
+            console.error('Erreur fetch transaction_documents:', relsError);
+            setExistingAttachments([]);
+            return;
+          }
+          const docIds = rels.map(r => r.document_id);
+          if (docIds.length === 0) {
+            setExistingAttachments([]);
+            return;
+          }
+          // Fetch all documents by ids
+          const { data: docs, error: docsError } = await supabase
+            .from('documents')
+            .select('*')
+            .in('id', docIds);
+          if (docsError) {
+            console.error('Erreur fetch documents:', docsError);
+            setExistingAttachments([]);
+            return;
+          }
+          // Ajoute le signedUrl à chaque doc existant dès le fetch
+          const updated = await Promise.all(docs.map(async (doc) => {
+            if (doc.signedUrl) return doc;
+            try {
+              const { data } = await supabase.storage.from('documents').createSignedUrl(doc.path || doc.file_path || doc.name, 60 * 60);
+              return { ...doc, signedUrl: data?.signedUrl || '' };
+            } catch {
+              return { ...doc, signedUrl: '' };
+            }
+          }));
+          setExistingAttachments(updated);
+        } catch (e) {
+          // ignore
+        } finally {
+          setIsLoading(false)
+        }
+      })()
+    } else {
+      setExistingAttachments([])
+    }
+  }, [transactionId, isOpen])
+
+  // --- Dupliquer les pièces jointes lors de la duplication ---
+  useEffect(() => {
+    if (transactionToClone && isOpen && !transactionId) {
+      (async () => {
+        setIsLoading(true)
+        try {
+          // Fetch all document_ids for la transaction à cloner
+          const { data: rels, error: relsError } = await supabase
+            .from('transaction_documents')
+            .select('document_id')
+            .eq('transaction_id', transactionToClone.id);
+          if (relsError) {
+            console.error('Erreur fetch transaction_documents:', relsError);
+            setExistingAttachments([]);
+            return;
+          }
+          const docIds = rels.map(r => r.document_id);
+          if (docIds.length === 0) {
+            setExistingAttachments([]);
+            return;
+          }
+          // Fetch all documents by ids
+          const { data: docs, error: docsError } = await supabase
+            .from('documents')
+            .select('*')
+            .in('id', docIds);
+          if (docsError) {
+            console.error('Erreur fetch documents:', docsError);
+            setExistingAttachments([]);
+            return;
+          }
+          // Ajoute le signedUrl à chaque doc existant dès le fetch
+          const updated = await Promise.all(docs.map(async (doc) => {
+            if (doc.signedUrl) return doc;
+            try {
+              const { data } = await supabase.storage.from('documents').createSignedUrl(doc.path || doc.file_path || doc.name, 60 * 60);
+              return { ...doc, signedUrl: data?.signedUrl || '' };
+            } catch {
+              return { ...doc, signedUrl: '' };
+            }
+          }));
+          setExistingAttachments(updated);
+        } catch (e) {
+          // ignore
+        } finally {
+          setIsLoading(false)
+        }
+      })()
+    }
+  }, [transactionToClone, isOpen, transactionId])
+
+  // --- Attachments Handlers ---
+  const handleAttachmentsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      // Ajoute les nouvelles pièces jointes à celles déjà sélectionnées
+      setAttachments(prev => ([...prev, ...Array.from(e.target.files)]))
+      // Réinitialise la valeur de l'input pour permettre de re-sélectionner les mêmes fichiers si besoin
+      if (attachmentsInputRef.current) attachmentsInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleRemoveExistingAttachment = async (docId: string) => {
+    setIsLoading(true)
+    try {
+      await supabase.from('documents').delete().eq('id', docId)
+      setExistingAttachments(prev => prev.filter(doc => doc.id !== docId))
+      toast({ title: 'Suppression', description: 'Pièce jointe supprimée.' })
+    } catch (e) {
+      toast({ title: 'Erreur', description: "Impossible de supprimer la pièce jointe.", variant: 'destructive' })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
       setIsLoading(true)
       
-      if (formData.category === 'loyer' && formData.type === 'income') {
+      // Récupère l'utilisateur connecté
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Erreur",
+          description: "Utilisateur non authentifié.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (formData.category === 'loyer' && formData.transaction_type === 'income') {
         if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
           toast({
             title: "Erreur",
@@ -346,70 +471,105 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
       const transactionData = {
         ...formData,
         amount: parseFloat(formData.amount),
-        updated_at: new Date().toISOString()
+        user_id: user.id, // Ajoute l'ID de l'utilisateur ici !
       }
-      
+      let transactionRes
       if (transactionId) {
-        // Update existing transaction
-        const { error } = await supabase
+        transactionRes = await supabase
           .from('transactions')
           .update(transactionData)
           .eq('id', transactionId)
-        
-        if (error) {
-          console.error('Erreur lors de la mise à jour de la transaction:', error)
-          toast({
-            title: "Erreur",
-            description: "Impossible de mettre à jour la transaction.",
-            variant: "destructive"
-          })
-          return
-        }
-        
-        toast({
-          title: "Succès",
-          description: "Transaction mise à jour avec succès.",
-        })
+          .select()
+          .single()
       } else {
-        // Create new transaction
-        // Récupérer l'ID de l'utilisateur actuel
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        
-        if (sessionError || !session) {
-          console.error('Erreur de session:', sessionError)
-          toast({
-            title: "Erreur de session",
-            description: "Veuillez vous reconnecter pour créer une transaction.",
-            variant: "destructive"
-          })
-          return
-        }
-        
-        const { error } = await supabase
+        transactionRes = await supabase
           .from('transactions')
-          .insert({
-            ...transactionData,
-            user_id: session.user.id,
-            created_at: new Date().toISOString()
-          })
-        
-        if (error) {
-          console.error('Erreur lors de la création de la transaction:', error)
-          toast({
-            title: "Erreur",
-            description: "Impossible de créer la transaction.",
-            variant: "destructive"
-          })
-          return
-        }
-        
-        toast({
-          title: "Succès",
-          description: "Transaction créée avec succès.",
-        })
+          .insert([transactionData])
+          .select()
+          .single()
       }
-      
+      if (transactionRes.error || !transactionRes.data) {
+        toast({
+          title: "Erreur",
+          description: transactionRes.error?.message || "Impossible de créer la transaction.",
+          variant: "destructive"
+        })
+        return
+      }
+      const txnId = transactionRes.data.id
+      // --- Handle attachments upload ---
+      if (attachments.length > 0) {
+        for (const file of attachments) {
+          // Générer un chemin unique pour le fichier (même logique que la modale principale)
+          const fileExtension = file.name.split('.').pop() || '';
+          const fileName = `${Date.now()}_${file.name}`;
+          const filePath = `${user.id}/transactions/${txnId}/${fileName}`;
+
+          // Upload storage avec options
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('documents')
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          if (uploadError) {
+            toast({ title: 'Erreur', description: `Erreur lors de l'upload de ${file.name}` })
+            console.error('Erreur upload storage:', uploadError)
+            continue
+          }
+
+          // Insert document record (avec user_id et metadata)
+          const { data: docInsert, error: docError } = await supabase
+            .from('documents')
+            .insert({
+              user_id: user.id,
+              name: file.name,
+              file_path: filePath,
+              file_size: file.size,
+              mime_type: file.type,
+              type: 'attachment',
+              category: 'transaction',
+              metadata: { original_filename: file.name }
+            })
+            .select()
+            .single();
+          if (docError || !docInsert) {
+            console.error('Erreur insert documents:', docError);
+            continue;
+          }
+          // Insert relation in transaction_documents
+          const { error: relError } = await supabase
+            .from('transaction_documents')
+            .insert({
+              transaction_id: txnId,
+              document_id: docInsert.id,
+            });
+          if (relError) {
+            console.error('Erreur insert transaction_documents:', relError);
+          }
+        }
+      }
+      // --- Lier les pièces jointes existantes lors de la duplication ---
+      if (!transactionId && existingAttachments.length > 0) {
+        for (const doc of existingAttachments) {
+          const { error: relError } = await supabase
+            .from('transaction_documents')
+            .insert({
+              transaction_id: txnId,
+              document_id: doc.id,
+            });
+          if (relError) {
+            console.error('Erreur insert transaction_documents (duplication):', relError);
+          }
+        }
+      }
+      toast({
+        title: "Succès",
+        description: transactionId ? "Transaction modifiée avec succès." : "Transaction créée avec succès.",
+      })
       setTransactionSaved(true)
+      setAttachments([])
+      if (attachmentsInputRef.current) attachmentsInputRef.current.value = ''
       onClose(true)
     } catch (error) {
       console.error('Erreur lors de la soumission du formulaire:', error)
@@ -446,291 +606,146 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, propertyIdFromUrl, properties]);
 
+  // Effet pour préremplir le montant selon la catégorie, le type et la propriété (en utilisant les labels)
+  useEffect(() => {
+    if (!formData.property_id) return;
+    // On attend que le type soit bien défini ET présent dans la liste
+    const selectedType = types.find(type => type.id === formData.type);
+    if (!formData.type || !selectedType) return;
+    const selectedCategory = categories.find(cat => cat.id === formData.category);
+    const valeurPourPreRemplissage = (selectedType?.name || selectedCategory?.name || '').toLowerCase();
+    const fetchAndPrefillAmount = async () => {
+      try {
+        const { data: property, error } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', formData.property_id)
+          .single();
+        if (error || !property) return;
+        let montant = '';
+        switch (valeurPourPreRemplissage) {
+          case 'loyer':
+            montant = property.rent?.toString() || '';
+            break;
+          case 'taxe foncière':
+          case 'taxe_fonciere':
+            montant = property.property_tax?.toString() || '';
+            break;
+          case 'taxe habitation':
+          case 'taxe_habitation':
+            montant = property.habitation_tax?.toString() || '';
+            break;
+          case 'assurance':
+            montant = property.insurance?.toString() || '';
+            break;
+          case 'frais de gestion':
+          case 'frais_gestion':
+            if (property.rent && property.management_fee_percentage) {
+              const mgmt = (property.rent * property.management_fee_percentage) / 100;
+              montant = mgmt.toFixed(2);
+            }
+            break;
+          // Ajoute ici d'autres types/catégories si besoin
+          default:
+            montant = '';
+        }
+        setFormData(prev => ({ ...prev, amount: montant }));
+      } catch (err) {
+        // Rien à faire
+      }
+    };
+    fetchAndPrefillAmount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.property_id, formData.category, formData.type, categories, types]);
+
+  // Effet pour sélectionner automatiquement le premier type disponible dès que la liste des types change (utile après changement de catégorie)
+  useEffect(() => {
+    if (types.length > 0 && !formData.type) {
+      setFormData(prev => ({ ...prev, type: types[0].id }));
+    }
+    // Si plus aucun type dispo, on vide le champ
+    if (types.length === 0 && formData.type) {
+      setFormData(prev => ({ ...prev, type: '' }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [types]);
+
+  // Fallback : si la catégorie/type de la transaction n'existe plus, sélectionner la première catégorie/type dispo
+  useEffect(() => {
+    if (!transactionId || !formInitialized) return;
+    // Catégorie absente ?
+    if (formData.category && !categories.some(cat => cat.id === formData.category)) {
+      setFormData(prev => ({
+        ...prev,
+        category: categories[0]?.id || '',
+        type: ''
+      }));
+    }
+    // Type absent ?
+    if (formData.type && types.length > 0 && !types.some(t => t.id === formData.type)) {
+      setFormData(prev => ({
+        ...prev,
+        type: types[0]?.id || ''
+      }));
+    }
+  }, [transactionId, formInitialized, categories, types]);
+
+  // Affichage conditionnel du formulaire : masquer tant que tout n'est pas prêt
+  const isReadyToShowForm = (!transactionId && !transactionToClone) || (
+    categories.length > 0 && properties.length > 0 && formInitialized
+  );
+
+  function AttachmentLink({ filePath, fileName }: { filePath: string, fileName: string }) {
+    const [signedUrl, setSignedUrl] = useState<string>("");
+    useEffect(() => {
+      async function getUrl() {
+        const { data, error } = await supabase
+          .storage
+          .from('documents')
+          .createSignedUrl(filePath, 60 * 60); // 1h
+        if (data?.signedUrl) setSignedUrl(data.signedUrl)
+      }
+      getUrl();
+    }, [filePath]);
+    if (!signedUrl) return <span>Chargement...</span>;
+    return <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{fileName}</a>;
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
-          <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
-            </svg>
-            <DialogTitle>
-              {transactionId ? 'Modifier la transaction' : transactionToClone ? 'Dupliquer la transaction' : 'Ajouter une transaction'}
-            </DialogTitle>
+        {/* DialogTitle visually hidden pour accessibilité Radix UI */}
+        <DialogTitle asChild>
+          <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+            {transactionId ? 'Modifier la transaction' : transactionToClone ? 'Dupliquer la transaction' : 'Ajouter une transaction'}
+          </span>
+        </DialogTitle>
+        {isReadyToShowForm ? (
+          <TransactionFormFields
+            formData={formData}
+            setFormData={setFormData}
+            categories={categories}
+            types={types}
+            properties={properties}
+            isLoading={isLoading}
+            handleSubmit={handleSubmit}
+            handleCategoryChange={handleCategoryChange}
+            attachments={attachments}
+            attachmentsInputRef={attachmentsInputRef}
+            handleAttachmentsChange={handleAttachmentsChange}
+            handleRemoveAttachment={handleRemoveAttachment}
+            existingAttachments={existingAttachments}
+            handleRemoveExistingAttachment={handleRemoveExistingAttachment}
+            fetchError={fetchError}
+            onClose={onClose}
+            transactionId={transactionId}
+            transactionToClone={transactionToClone}
+          />
+        ) : (
+          <div style={{padding: 40, textAlign: 'center'}}>
+            <span>Chargement des données...</span>
           </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-4">
-            <div>
-              <table className="w-full">
-                <tbody>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '40%' }}>
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        <span>Propriété</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        value={formData.property_id}
-                        onValueChange={(value) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            property_id: value
-                          }))
-                          
-                          // Si la catégorie est déjà "loyer", préremplir le montant du loyer
-                          if (formData.category === 'loyer') {
-                            prefillRent(value)
-                          }
-                        }}
-                        disabled={!!propertyId} // Désactiver si propertyId est fourni
-                        required
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une propriété" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {properties.map((property) => (
-                            <SelectItem key={property.id} value={property.id}>
-                              {property.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Type</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        value={formData.type}
-                        onValueChange={(value) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            type: value
-                          }))
-                          // Préremplir le montant en fonction de la propriété et de la catégorie
-                          prefillAmount(formData.property_id, formData.category, value)
-                        }}
-                        required
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="income">Revenu</SelectItem>
-                          <SelectItem value="expense">Dépense</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        <span>Catégorie</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        value={formData.category}
-                        onValueChange={(value) => {
-                          // Mettre à jour la catégorie dans le formulaire
-                          setFormData(prev => ({
-                            ...prev,
-                            category: value
-                          }))
-                          
-                          // Si la catégorie est "loyer" et qu'une propriété est sélectionnée, préremplir le montant du loyer
-                          if (value === 'loyer' && formData.property_id) {
-                            prefillRent(formData.property_id)
-                          }
-                        }}
-                        required
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {formData.type === 'income' ? (
-                            <>
-                              <SelectItem value="loyer">Loyer</SelectItem>
-                              <SelectItem value="caution">Caution</SelectItem>
-                              <SelectItem value="autre_revenu">Autre revenu</SelectItem>
-                            </>
-                          ) : (
-                            <>
-                              <SelectItem value="taxe_fonciere">Taxe foncière</SelectItem>
-                              <SelectItem value="taxe_habitation">Taxe d'habitation</SelectItem>
-                              <SelectItem value="assurance">Assurance</SelectItem>
-                              <SelectItem value="frais_gestion">Frais de gestion</SelectItem>
-                              <SelectItem value="charges_copropriete">Charges de copropriété</SelectItem>
-                              <SelectItem value="travaux">Travaux</SelectItem>
-                              <SelectItem value="interet_emprunt">Intérêts d'emprunt</SelectItem>
-                              <SelectItem value="autre_depense">Autre dépense</SelectItem>
-                            </>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Montant</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.amount}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          amount: e.target.value
-                        }))}
-                        required
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div>
-              <table className="w-full">
-                <tbody>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '20%' }}>
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>Date</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          date: e.target.value
-                        }))}
-                        required
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>Mois comptable</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="month"
-                        value={formData.accounting_month}
-                        onChange={(e) => {
-                          // Correction : pas de -1 sur le mois, car le champ <input type="month"> fournit déjà le bon format YYYY-MM
-                          // Il suffit d'utiliser la valeur telle quelle
-                          setFormData(prev => ({
-                            ...prev,
-                            accounting_month: e.target.value
-                          }))
-                        }}
-                        required
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div>
-              <table className="w-full">
-                <tbody>
-                  <tr>
-                    <td className="bg-gray-50 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '20%' }}>
-                      <div className="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                        </svg>
-                        <span>Description</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Textarea
-                        value={formData.description}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          description: e.target.value
-                        }))}
-                        placeholder="Description optionnelle..."
-                        className="resize-none"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onClose(false)}
-                  disabled={isLoading}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Annuler
-                </Button>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      {transactionId ? "Modification..." : "Création..."}
-                    </>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {transactionId ? "Modifier" : "Créer"}
-                    </>
-                  )}
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </form>
+        )}
       </DialogContent>
     </Dialog>
   )

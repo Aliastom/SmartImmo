@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Database } from '@/types/database'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { PageTransition, LoadingSpinner, AnimatedCard } from '@/components/ui/animated'
+import { PageTransition, AnimatedCard } from '@/components/ui/animated'
 import { PropertyRegimeCardMini } from '@/components/property/property-regime-card-mini';
 
 type Property = Database['public']['Tables']['properties']['Row']
@@ -121,7 +121,8 @@ export function ClientPage() {
   if (isLoading) {
     return (
       <PageTransition className="container py-6 md:py-10">
-        <LoadingSpinner className="h-64" size={60} />
+        {/* Rien à afficher, le loader global gère l'affichage */}
+        <div />
       </PageTransition>
     )
   }

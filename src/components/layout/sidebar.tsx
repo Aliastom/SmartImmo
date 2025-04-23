@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const navigation = [
   { name: 'Tableau de bord', href: '/dashboard', icon: '📊' },
@@ -24,6 +24,10 @@ export function Sidebar() {
   const supabase = createClientComponentClient()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [user, setUser] = useState<{ email: string; fullName?: string; avatarUrl?: string } | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuDirection, setMenuDirection] = useState<'up'|'down'>('down')
+  const profileRef = useRef<HTMLDivElement>(null)
 
   // Détecter la taille de l'écran côté client uniquement
   useEffect(() => {
@@ -45,6 +49,62 @@ export function Sidebar() {
       window.removeEventListener('resize', checkIfMobile)
     }
   }, [])
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser({
+          email: session.user.email || '',
+          fullName: session.user.user_metadata?.full_name || session.user.user_metadata?.name || undefined,
+          avatarUrl: session.user.user_metadata?.avatar_url || undefined,
+        })
+      } else {
+        setUser(null)
+      }
+    }
+    fetchUser()
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || '',
+          fullName: session.user.user_metadata?.full_name || session.user.user_metadata?.name || undefined,
+          avatarUrl: session.user.user_metadata?.avatar_url || undefined,
+        })
+      } else {
+        setUser(null)
+      }
+    })
+    return () => {
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
+  useEffect(() => {
+    if (menuOpen && profileRef.current) {
+      const rect = profileRef.current.getBoundingClientRect()
+      // Si le menu risque de dépasser le bas de l'écran, on l'ouvre vers le haut
+      if (window.innerHeight - rect.bottom < 120) {
+        setMenuDirection('up')
+      } else {
+        setMenuDirection('down')
+      }
+    }
+  }, [menuOpen])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -134,18 +194,60 @@ export function Sidebar() {
           )
         })}
       </nav>
-      <div className="p-4">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/10"
-          onClick={handleSignOut}
-        >
-          <span className="mr-3">
-            👋
-          </span>
-          Se déconnecter
-        </Button>
-      </div>
+      {user && (
+        <div className="px-4 pb-4 border-t border-gray-800 mb-2 mt-2 flex flex-col items-start relative" ref={profileRef}>
+          <button
+            className="flex items-center gap-3 w-full focus:outline-none hover:bg-white/10 rounded-lg p-1.5 transition"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            tabIndex={0}
+          >
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt="avatar" className="rounded-full w-10 h-10 object-cover border-2 border-gray-700" />
+            ) : (
+              <div className="rounded-full bg-gradient-to-br from-indigo-600 to-blue-400 flex items-center justify-center w-10 h-10 text-lg text-white font-bold uppercase">
+                {user.fullName ? user.fullName.split(' ').map(w=>w[0]).join('').slice(0,2) : user.email[0]}
+              </div>
+            )}
+            <div className="flex flex-col text-left">
+              <span className="text-white text-sm font-semibold leading-tight">{user.fullName || user.email}</span>
+              <span className="text-gray-400 text-xs leading-tight">{user.email}</span>
+            </div>
+            <svg className={`ml-auto w-4 h-4 text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          {menuOpen && (
+            <>
+              {/* Backdrop pour fermer le menu au clic extérieur */}
+              <div
+                className="fixed inset-0 z-[9998] cursor-default"
+                aria-hidden="true"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                className={`absolute left-0 right-0 bg-gray-900 border border-gray-800 rounded-lg shadow-lg z-[9999] animate-fade-in flex flex-col ${menuDirection==='up' ? 'bottom-14 mb-2' : 'mt-2 top-full'}`}
+                style={{ minWidth: 180 }}
+                tabIndex={-1}
+                role="menu"
+              >
+                <Link href="/profile" className="px-4 py-2 text-sm text-gray-100 hover:bg-white/10 rounded-t-lg transition" tabIndex={0} onClick={()=>setMenuOpen(false)}>
+                  Mon profil
+                </Link>
+                <button
+                  className="px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white rounded-b-lg text-left transition"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleSignOut();
+                  }}
+                  tabIndex={0}
+                >
+                  Se déconnecter
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

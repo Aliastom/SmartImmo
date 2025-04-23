@@ -2,6 +2,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import ClientLayout from './client-layout'
 import Script from 'next/script';
+import GlobalLoader from "@/components/ui/global-loader";
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -15,6 +16,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Corrige : retire l'import useEffect qui n'a plus lieu d'être dans un composant server
+  // (il a été déplacé dans DevWatermarkRemover côté client)
+  // import { useEffect } from 'react'
   return (
     <html lang="fr">
       <head>
@@ -26,6 +30,8 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ClientLayout>
+          <GlobalLoader />
+          {/* <DevWatermarkRemover /> */}
           {children}
         </ClientLayout>
       </body>

@@ -1,0 +1,312 @@
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import React, { useRef, useCallback } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
+
+interface Property { id: string; name: string; }
+
+interface TransactionFormFieldsProps {
+  formData: any;
+  setFormData: (fn: (prev: any) => any) => void;
+  categories: any[];
+  types: any[];
+  properties: Property[];
+  isLoading: boolean;
+  handleSubmit: (e: React.FormEvent) => void;
+  handleCategoryChange: (categoryId: string) => void;
+  attachments: File[];
+  attachmentsInputRef: React.RefObject<HTMLInputElement>;
+  handleAttachmentsChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleRemoveAttachment: (idx: number) => void;
+  existingAttachments: any[];
+  handleRemoveExistingAttachment: (id: string) => void;
+  fetchError: string | null;
+  onClose: (saved?: boolean) => void;
+  transactionId?: string;
+  transactionToClone?: any;
+}
+
+const typeColors: Record<string, string> = {
+  income: 'bg-green-100 text-green-700',
+  expense: 'bg-red-100 text-red-700',
+};
+
+const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
+  formData, setFormData, categories, types, properties, isLoading,
+  handleSubmit, handleCategoryChange,
+  attachments, attachmentsInputRef, handleAttachmentsChange, handleRemoveAttachment,
+  existingAttachments, handleRemoveExistingAttachment, fetchError,
+  onClose, transactionId, transactionToClone
+}) => {
+  // Drag & drop pour pièces jointes
+  const dropRef = useRef<HTMLDivElement>(null);
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const dt = e.dataTransfer.files;
+      const fileList = Array.from(dt);
+      // Simule un event pour handleAttachmentsChange
+      const input = attachmentsInputRef.current;
+      if (input) {
+        const dataTransfer = new DataTransfer();
+        fileList.forEach(f => dataTransfer.items.add(f));
+        input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  }, [attachmentsInputRef, handleAttachmentsChange]);
+
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  // Focus auto sur le premier champ
+  const firstInputRef = useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (firstInputRef.current) firstInputRef.current.focus();
+  }, []);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* HEADER PRINCIPAL */}
+      <div className="flex items-center gap-3 mb-10 mt-4">
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={`rounded-full p-2 shadow ${typeColors[formData.transaction_type] || 'bg-gray-100 text-gray-700'}`}
+        >
+          {formData.transaction_type === 'income' ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+          ) : formData.transaction_type === 'expense' ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+          )}
+        </motion.div>
+        <div>
+          <span className="text-xl font-bold">
+            {transactionId ? 'Modifier la transaction' : transactionToClone ? 'Dupliquer la transaction' : 'Ajouter une transaction'}
+          </span>
+          {formData.transaction_type && (
+            <Badge className={`ml-2 ${typeColors[formData.transaction_type]}`}>{formData.transaction_type === 'income' ? 'Revenu' : 'Dépense'}</Badge>
+          )}
+        </div>
+      </div>
+      {/* GROUPE TRANSACTION */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 bg-gray-50 rounded-lg p-6 mb-2">
+        <div>
+          <Label htmlFor="property_id" className="mb-2 block">Bien</Label>
+          <Select
+            value={formData.property_id}
+            onValueChange={val => setFormData((prev: any) => ({ ...prev, property_id: val }))}
+            disabled={isLoading || properties.length === 0}
+          >
+            <SelectTrigger id="property_id">
+              <SelectValue placeholder="Sélectionnez un bien" />
+            </SelectTrigger>
+            <SelectContent>
+              {properties.map((property) => (
+                <SelectItem key={property.id} value={property.id}>
+                  {property.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="transaction_type" className="mb-2 block">Type de transaction</Label>
+          <Select
+            value={formData.transaction_type}
+            onValueChange={val => setFormData((prev: any) => ({ ...prev, transaction_type: val }))}
+            disabled={isLoading}
+          >
+            <SelectTrigger id="transaction_type">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="income">Revenu</SelectItem>
+              <SelectItem value="expense">Dépense</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="category" className="mb-2 block">Catégorie</Label>
+          <Select
+            value={formData.category}
+            onValueChange={val => handleCategoryChange(val)}
+            disabled={isLoading || categories.length === 0}
+          >
+            <SelectTrigger id="category">
+              <SelectValue placeholder="Catégorie" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="type" className="mb-2 block">Type</Label>
+          <Select
+            value={formData.type}
+            onValueChange={val => setFormData((prev: any) => ({ ...prev, type: val }))}
+            disabled={isLoading || types.length === 0}
+          >
+            <SelectTrigger id="type">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {types.map((type) => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {/* SÉPARATEUR */}
+      <div className="h-4"></div>
+      {/* GROUPE MONTANT & DATE */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="amount">Montant</Label>
+          <div className="relative flex items-center">
+            <Input
+              id="amount"
+              type="number"
+              ref={firstInputRef}
+              value={formData.amount}
+              onChange={e => setFormData((prev: any) => ({ ...prev, amount: e.target.value }))}
+              disabled={isLoading}
+              min="0"
+              step="0.01"
+              placeholder="Montant"
+              className="pr-16"
+            />
+            {formData.transaction_type && (
+              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold ${formData.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{formData.transaction_type === 'income' ? '+' : '-'} €</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="date">Date</Label>
+          <Input
+            id="date"
+            type="date"
+            value={formData.date}
+            onChange={e => setFormData((prev: any) => ({ ...prev, date: e.target.value }))}
+            disabled={isLoading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="accounting_month">Mois comptable</Label>
+          <Input
+            id="accounting_month"
+            type="month"
+            value={formData.accounting_month}
+            onChange={e => setFormData((prev: any) => ({ ...prev, accounting_month: e.target.value }))}
+            disabled={isLoading}
+          />
+        </div>
+      </div>
+      {/* SÉPARATEUR */}
+      <div className="h-4"></div>
+      {/* GROUPE DESCRIPTION & ATTACHMENTS */}
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={e => setFormData((prev: any) => ({ ...prev, description: e.target.value }))}
+          disabled={isLoading}
+          rows={2}
+          placeholder="Description"
+        />
+      </div>
+      {/* Pièces jointes modernisées avec Drag & Drop */}
+      <div>
+        <Label>Pièces jointes</Label>
+        <div
+          ref={dropRef}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 transition mb-2 bg-gray-50"
+          onClick={() => attachmentsInputRef.current?.click()}
+        >
+          <span className="text-gray-500">Glissez-déposez vos fichiers ici ou cliquez pour sélectionner</span>
+          <Input
+            type="file"
+            multiple
+            ref={attachmentsInputRef}
+            onChange={handleAttachmentsChange}
+            disabled={isLoading}
+            className="hidden"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {attachments.map((file, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="flex items-center space-x-2 bg-blue-50 px-2 py-1 rounded shadow-sm"
+            >
+              <span className="text-xs font-medium text-blue-800">{file.name}</span>
+              <Button type="button" size="sm" variant="ghost" onClick={() => handleRemoveAttachment(idx)}>
+                Supprimer
+              </Button>
+            </motion.div>
+          ))}
+          {existingAttachments.map((doc, idx) => (
+            <motion.div
+              key={doc.id}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="flex items-center space-x-2 bg-gray-100 px-2 py-1 rounded shadow-sm"
+            >
+              <a
+                href={doc.signedUrl || doc.url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs underline text-blue-600"
+                style={{ pointerEvents: doc.signedUrl || doc.url ? 'auto' : 'none', color: (doc.signedUrl || doc.url) ? '#2563eb' : '#aaa', cursor: (doc.signedUrl || doc.url) ? 'pointer' : 'not-allowed' }}
+                onClick={e => {
+                  if (!(doc.signedUrl || doc.url)) e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >{doc.name || doc.file_name || 'Pièce jointe'}</a>
+              <Button type="button" size="sm" variant="ghost" onClick={() => handleRemoveExistingAttachment(doc.id)}>
+                Supprimer
+              </Button>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+      {/* BOUTONS */}
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={isLoading} className="rounded-full px-6">
+          Annuler
+        </Button>
+        <Button type="submit" variant="default" disabled={isLoading} className="rounded-full px-8 flex items-center gap-2 shadow-md hover:shadow-lg transition">
+          {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : (
+            transactionId ? <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+          )}
+          {transactionId ? 'Enregistrer' : 'Ajouter'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default TransactionFormFields;

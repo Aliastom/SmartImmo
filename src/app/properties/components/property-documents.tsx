@@ -40,6 +40,7 @@ export function PropertyDocuments({ propertyId, refreshTrigger = 0 }: PropertyDo
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
+  const [propertyName, setPropertyName] = useState<string>('');
   const { toast } = useToast()
   const supabase = createClientComponentClient<Database>()
 
@@ -103,6 +104,20 @@ export function PropertyDocuments({ propertyId, refreshTrigger = 0 }: PropertyDo
 
     loadDocuments()
   }, [propertyId, refreshTrigger, supabase, toast])
+
+  useEffect(() => {
+    if (!propertyId) return;
+    const fetchPropertyName = async () => {
+      const supabase = createClientComponentClient<Database>();
+      const { data, error } = await supabase
+        .from('properties')
+        .select('name')
+        .eq('id', propertyId)
+        .single();
+      if (!error && data) setPropertyName(data.name);
+    };
+    fetchPropertyName();
+  }, [propertyId]);
 
   useEffect(() => {
     let result = [...documents]
@@ -247,7 +262,7 @@ export function PropertyDocuments({ propertyId, refreshTrigger = 0 }: PropertyDo
   return (
     <Card className="mt-6">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>Documents</CardTitle>
+        <CardTitle>Documents du bien{propertyName ? ` : ${propertyName}` : ''}</CardTitle>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
           <Button onClick={() => setIsModalOpen(true)} className="bg-black hover:bg-black/80 text-white">
             <svg 
@@ -516,6 +531,7 @@ export function PropertyDocuments({ propertyId, refreshTrigger = 0 }: PropertyDo
           properties={[]}
           initialPropertyId={propertyId}
           initialCategory="property"
+          propertyName={propertyName}
         />
 
         {/* Delete Modal */}

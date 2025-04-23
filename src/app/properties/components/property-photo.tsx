@@ -4,7 +4,6 @@ import { useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import { LoadingSpinner } from '@/components/ui/animated'
 import { CardHeader, CardContent, CardTitle } from '@/components/ui/card'
 
 interface PropertyPhotoProps {
@@ -94,7 +93,6 @@ export function PropertyPhoto({
           >
             {isUploading && (
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-                <LoadingSpinner className="text-white" />
               </div>
             )}
             <img 
@@ -118,7 +116,7 @@ export function PropertyPhoto({
         ) : (
           <div className="text-center text-gray-400 w-full h-full flex flex-col items-center justify-center">
             {isUploading ? (
-              <LoadingSpinner />
+              <div className="text-gray-400">Chargement...</div>
             ) : (
               <>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

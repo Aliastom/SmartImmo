@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState } from "react"
 import TransactionModal from "./transaction-modal"
 import { TransactionTable } from "./transaction-table"
 import { motion } from 'framer-motion'
 import { PageTransition, AnimatedCard } from '@/components/ui/animated'
+import { useEffect, useState } from "react"
 
 export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -16,7 +16,58 @@ export default function TransactionsPage() {
   const [transactionToClone, setTransactionToClone] = useState<any | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState("all")
+  const [filterCategory, setFilterCategory] = useState("all")
+  const [filterProperty, setFilterProperty] = useState("all")
+  const [filterMonth, setFilterMonth] = useState("")
+  const [categories, setCategories] = useState<{ id: string, name: string }[]>([])
+  const [types, setTypes] = useState<{ id: string, name: string }[]>([])
+  const [properties, setProperties] = useState<{ id: string, name: string }[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [totalIncome, setTotalIncome] = useState(0);
+  const [totalExpense, setTotalExpense] = useState(0);
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    async function fetchFilters() {
+      try {
+        const supabase = (await import('@supabase/auth-helpers-nextjs')).createClientComponentClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const [{ data: cat }, { data: typ }, { data: prop }] = await Promise.all([
+          supabase.from('categories').select('id, name').eq('active', true),
+          supabase.from('types').select('id, name').eq('active', true),
+          supabase.from('properties').select('id, name').eq('user_id', session.user.id)
+        ])
+        setCategories(cat || [])
+        setTypes(typ || [])
+        setProperties(prop || [])
+      } catch (e) {}
+    }
+    fetchFilters()
+  }, [])
+
+  useEffect(() => {
+    if (filterCategory === 'all') {
+      async function fetchAllTypes() {
+        try {
+          const supabase = (await import('@supabase/auth-helpers-nextjs')).createClientComponentClient()
+          const { data: typ } = await supabase.from('types').select('id, name').eq('active', true)
+          setTypes(typ || [])
+        } catch {}
+      }
+      fetchAllTypes()
+    } else {
+      async function fetchTypesForCategory() {
+        try {
+          const supabase = (await import('@supabase/auth-helpers-nextjs')).createClientComponentClient()
+          const { data: typ } = await supabase.from('types').select('id, name').eq('active', true).eq('category_id', filterCategory)
+          setTypes(typ || [])
+        } catch {}
+      }
+      fetchTypesForCategory()
+    }
+    setFilterType('all')
+  }, [filterCategory])
 
   const handleEdit = (id: string) => {
     setSelectedTransactionId(id)
@@ -34,11 +85,18 @@ export default function TransactionsPage() {
     setIsModalOpen(false)
     setSelectedTransactionId(undefined)
     setTransactionToClone(undefined)
-    // Déclencher un rafraîchissement des données uniquement si une transaction a été sauvegardée
     if (saved) {
       setRefreshTrigger(prev => prev + 1)
     }
   }
+
+  const handleTransactionsLoaded = (transactions: any[]) => {
+    const income = transactions.filter(t => t.transaction_type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+    const expense = transactions.filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
+    setTotalIncome(income);
+    setTotalExpense(expense);
+    setBalance(income - expense);
+  };
 
   return (
     <PageTransition className="container py-10">
@@ -80,7 +138,29 @@ export default function TransactionsPage() {
           </motion.div>
         </div>
 
-        {/* Actions */}
+        {/* Cartes totaux */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <Card className="bg-green-50">
+            <CardContent className="py-4">
+              <div className="text-xs font-semibold text-green-700 mb-1">+ Revenus</div>
+              <div className="text-2xl font-bold text-green-800">{totalIncome.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-red-50">
+            <CardContent className="py-4">
+              <div className="text-xs font-semibold text-red-700 mb-1">- Dépenses</div>
+              <div className="text-2xl font-bold text-red-800">{totalExpense.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-orange-50">
+            <CardContent className="py-4">
+              <div className="text-xs font-semibold text-orange-700 mb-1">∑ Bilan</div>
+              <div className="text-2xl font-bold text-orange-800">{balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Actions + Filtres avancés */}
         <motion.div 
           className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
           initial={{ opacity: 0, y: 20 }}
@@ -111,16 +191,46 @@ export default function TransactionsPage() {
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <span className="text-sm text-gray-600">Filtrer :</span>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Toutes les transactions" />
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes les transactions</SelectItem>
-                <SelectItem value="income">Revenus</SelectItem>
-                <SelectItem value="expense">Dépenses</SelectItem>
+                <SelectItem value="all">Toutes catégories</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous types</SelectItem>
+                {types.map(type => (
+                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterProperty} onValueChange={setFilterProperty}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Bien" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous biens</SelectItem>
+                {properties.map(prop => (
+                  <SelectItem key={prop.id} value={prop.id}>{prop.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="month"
+              className="w-[140px]"
+              value={filterMonth}
+              onChange={e => setFilterMonth(e.target.value)}
+              placeholder="Mois comptable"
+            />
           </div>
         </motion.div>
 
@@ -135,9 +245,13 @@ export default function TransactionsPage() {
               <TransactionTable 
                 searchQuery={searchQuery}
                 filterType={filterType}
+                filterCategory={filterCategory}
+                filterProperty={filterProperty}
+                filterMonth={filterMonth}
                 onEdit={handleEdit}
                 onDuplicate={handleDuplicate}
                 refreshTrigger={refreshTrigger}
+                onTransactionsLoaded={handleTransactionsLoaded}
               />
             </CardContent>
           </AnimatedCard>

@@ -23,7 +23,7 @@ interface TransactionModalProps {
 }
 
 type TransactionType = 'income' | 'expense'
-type TransactionCategory = 'loyer' | 'taxe_fonciere' | 'assurance' | 'frais_gestion' | 'reparation' | 'autre'
+type TransactionCategory = 'loyer' | 'taxe_fonciere' | 'taxe_ordures' | 'assurance' | 'frais_gestion' | 'reparation' | 'autre'
 
 interface TransactionForm {
   date: string
@@ -49,6 +49,16 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
     new Date().toISOString().slice(0, 7) // Format YYYY-MM
   )
   const [propertyDetails, setPropertyDetails] = useState<any>(null)
+
+  const categoryOptions = [
+    { value: 'loyer', label: 'Loyer' },
+    { value: 'taxe_fonciere', label: 'Taxe foncière' },
+    { value: 'taxe_ordures', label: "Taxe d'ordures ménagères (OM)" },
+    { value: 'assurance', label: 'Assurance' },
+    { value: 'frais_gestion', label: 'Frais de gestion' },
+    { value: 'reparation', label: 'Réparation' },
+    { value: 'autre', label: 'Autre' },
+  ]
 
   // Récupérer les détails de la propriété au chargement
   useEffect(() => {
@@ -120,6 +130,9 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
     if (formData.type === 'income' && formData.category === 'loyer') {
       // Pour les revenus de type loyer, utiliser le montant du loyer de la propriété
       amount = propertyDetails.rent || 0
+    } else if (formData.type === 'income' && formData.category === 'taxe_ordures') {
+      // Pour la taxe d'ordures ménagères, utiliser la valeur si elle existe
+      amount = propertyDetails.waste_tax || 0
     } else if (formData.type === 'expense') {
       // Pour les dépenses, utiliser les montants des charges récurrentes
       switch (formData.category) {
@@ -295,18 +308,17 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
                   <td className="p-3">
                     <Select
                       value={formData.category}
-                      onValueChange={(value: TransactionCategory) => setFormData({ ...formData, category: value })}
+                      onValueChange={(value) => setFormData({ ...formData, category: value as TransactionCategory })}
                     >
-                      <SelectTrigger id="category" className="h-10 border-0">
-                        <SelectValue placeholder="Catégorie" />
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Sélectionner une catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="loyer">Loyer</SelectItem>
-                        <SelectItem value="taxe_fonciere">Taxe foncière</SelectItem>
-                        <SelectItem value="assurance">Assurance</SelectItem>
-                        <SelectItem value="frais_gestion">Frais de gestion</SelectItem>
-                        <SelectItem value="reparation">Réparation</SelectItem>
-                        <SelectItem value="autre">Autre</SelectItem>
+                        {categoryOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </td>

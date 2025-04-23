@@ -20,6 +20,7 @@ interface DocumentUploadModalProps {
   loanId?: string
   initialPropertyId?: string
   initialCategory?: string
+  propertyName?: string
 }
 
 const DocumentUploadModal = ({ 
@@ -29,7 +30,8 @@ const DocumentUploadModal = ({
   tenantId,
   loanId,
   initialPropertyId,
-  initialCategory
+  initialCategory,
+  propertyName
 }: DocumentUploadModalProps) => {
   const [isLoading, setIsLoading] = useState(false)
   const [documentName, setDocumentName] = useState('')
@@ -194,7 +196,7 @@ const DocumentUploadModal = ({
     <Dialog open={isOpen} onOpenChange={(open) => !isLoading && onClose(false)}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Ajouter un document</DialogTitle>
+          <DialogTitle>Ajouter un document{propertyName ? ` pour le bien : ${propertyName}` : ''}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
@@ -286,23 +288,25 @@ const DocumentUploadModal = ({
             </div>
           </div>
           
-          <div>
-            <Label htmlFor="property" className="text-sm font-medium">Bien associé</Label>
-            <select
-              id="property"
-              value={propertyId}
-              onChange={(e) => setPropertyId(e.target.value)}
-              disabled={isLoading || !!initialPropertyId}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
-            >
-              <option value="">Aucun bien spécifique</option>
-              {properties.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!initialPropertyId && (
+            <div>
+              <Label htmlFor="property" className="text-sm font-medium">Bien associé</Label>
+              <select
+                id="property"
+                value={propertyId}
+                onChange={(e) => setPropertyId(e.target.value)}
+                disabled={isLoading || !!initialPropertyId}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
+              >
+                <option value="">Aucun bien spécifique</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           
           <div>
             <Label htmlFor="expiration" className="text-sm font-medium">Date d'expiration (optionnel)</Label>

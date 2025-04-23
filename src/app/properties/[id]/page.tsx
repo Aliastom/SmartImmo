@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
@@ -16,13 +16,15 @@ import { PropertyLoans } from '../components/property-loans'
 import { PropertyDocuments } from '../components/property-documents'
 import { PropertyPhoto } from '../components/property-photo'
 import { motion } from 'framer-motion'
-import { AnimatedCard, LoadingSpinner } from '@/components/ui/animated'
+import { AnimatedCard } from '@/components/ui/animated'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogClose } from '@/components/ui/dialog'
 import { X } from 'lucide-react'
 import { PropertyRegimeCard } from '@/components/property/property-regime-card'
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { PropertyDetailsTab } from '../components/property-details-tab'
+import { PropertyPhotosByRoom } from '../components/property-photos-by-room'
 
 export default function PropertyDetailPage() {
   const params = useParams()
@@ -44,6 +46,9 @@ export default function PropertyDetailPage() {
   const [transactionToClone, setTransactionToClone] = useState<any | undefined>()
   const [transactionId, setTransactionId] = useState<any | undefined>()
   const [allProperties, setAllProperties] = useState<any[]>([]);
+  const [totalIncome, setTotalIncome] = useState(0)
+  const [totalExpense, setTotalExpense] = useState(0)
+  const [balance, setBalance] = useState(0)
 
   // Onglet actif persistant via URL
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -356,6 +361,35 @@ export default function PropertyDetailPage() {
     router.push(`/properties/${id}?tab=${activeTab}`);
   };
 
+  // Calcul dynamique des totaux pour ce bien
+  const fetchPropertyTransactionsTotals = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount, transaction_type')
+        .eq('user_id', session.user.id)
+        .eq('property_id', propertyId)
+      if (error) throw error
+      const income = (data || []).filter(t => t.transaction_type === 'income').reduce((sum, t) => sum + Number(t.amount), 0)
+      const expense = (data || []).filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0)
+      setTotalIncome(income)
+      setTotalExpense(expense)
+      setBalance(income - expense)
+    } catch (e) {
+      setTotalIncome(0)
+      setTotalExpense(0)
+      setBalance(0)
+    }
+  }, [propertyId, supabase])
+
+  useEffect(() => {
+    if (propertyId) {
+      fetchPropertyTransactionsTotals()
+    }
+  }, [propertyId, refreshTrigger])
+
   return (
     <>
       {/* Header avec boutons de navigation */}
@@ -424,7 +458,7 @@ export default function PropertyDetailPage() {
 
       {isLoading ? (
         <div className="flex justify-center items-center h-[60vh]">
-          <LoadingSpinner size="lg" />
+          {/* SUPPRESSION DU LOADER LOCAL */}
         </div>
       ) : (
         <div className="space-y-6">
@@ -512,12 +546,13 @@ export default function PropertyDetailPage() {
 
           <div className="mt-8">
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="mb-4">
+              <TabsList className="mb-6">
                 <TabsTrigger value="transactions">Transactions</TabsTrigger>
                 <TabsTrigger value="loans">Prêts</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="tenant">Locataire</TabsTrigger>
                 <TabsTrigger value="regime">Régime fiscal</TabsTrigger>
+                <TabsTrigger value="details">Détails</TabsTrigger>
               </TabsList>
               
               <TabsContent value="transactions">
@@ -526,11 +561,8 @@ export default function PropertyDetailPage() {
                   onAddTransaction={() => setIsModalOpen(true)}
                   onDuplicateTransaction={handleDuplicateTransaction}
                   onEditTransaction={(transactionId) => {
-                    // Réinitialiser la transaction à cloner
                     setTransactionToClone(undefined);
-                    // Définir l'ID de la transaction à modifier
                     setTransactionId(transactionId);
-                    // Ouvrir le modal
                     setIsModalOpen(true);
                   }}
                   onDeleteTransaction={async (transactionId) => {
@@ -538,21 +570,16 @@ export default function PropertyDetailPage() {
                       try {
                         const { data: { session } } = await supabase.auth.getSession();
                         if (!session) return;
-                        
                         const { error } = await supabase
                           .from('transactions')
                           .delete()
                           .eq('id', transactionId)
                           .eq('user_id', session.user.id);
-                        
                         if (error) throw error;
-                        
                         toast({
                           title: "Transaction supprimée",
                           description: "La transaction a été supprimée avec succès"
                         });
-                        
-                        // Rafraîchir les données
                         setRefreshTrigger(prev => prev + 1);
                       } catch (error: any) {
                         console.error('Error deleting transaction:', error);
@@ -597,7 +624,7 @@ export default function PropertyDetailPage() {
                                 <td className="p-3 text-sm font-medium text-gray-500 uppercase">
                                   <div className="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 016 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7zM21 12h-6" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 016 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
                                     <span>Nom</span>
                                   </div>
@@ -608,7 +635,7 @@ export default function PropertyDetailPage() {
                                 <td className="p-3 text-sm font-medium text-gray-500 uppercase">
                                   <div className="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
                                     <span>Email</span>
                                   </div>
@@ -777,6 +804,9 @@ export default function PropertyDetailPage() {
               </TabsContent>
               <TabsContent value="regime">
                 <PropertyRegimeCard propertyRegimeId={property?.property_regime_id} />
+              </TabsContent>
+              <TabsContent value="details">
+                <PropertyPhotosByRoom property={property} />
               </TabsContent>
             </Tabs>
           </div>

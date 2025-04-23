@@ -9,7 +9,7 @@ import { Database } from '@/types/database'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
 import { motion } from 'framer-motion'
-import { AnimatedCard, PageTransition, LoadingSpinner } from '@/components/ui/animated'
+import { AnimatedCard, PageTransition } from '@/components/ui/animated'
 import { LoansSummary } from './components/loans-summary'
 import { FinancialForecast } from './components/financial-forecast'
 
@@ -357,7 +357,7 @@ export default function DashboardPage() {
         </div>
 
         {isLoading ? (
-          <LoadingSpinner className="h-64" size={60} />
+          <div className="h-64" />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <motion.div

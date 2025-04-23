@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import LeaseDurationField from './LeaseDurationField'
 
 type Property = Database['public']['Tables']['properties']['Row']
 type Tenant = Database['public']['Tables']['tenants']['Row']
@@ -398,6 +399,12 @@ export default function NewTenantPage() {
                     onChange={(e) => setFormData(prev => ({ ...prev, lease_end: e.target.value }))}
                   />
                 </div>
+                <LeaseDurationField
+                  leaseStart={formData.lease_start}
+                  leaseEnd={formData.lease_end}
+                  onLeaseEndChange={(date) => setFormData(prev => ({ ...prev, lease_end: date }))}
+                  onLeaseDurationChange={() => {}}
+                />
               </div>
             </div>
 

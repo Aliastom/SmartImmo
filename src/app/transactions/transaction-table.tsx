@@ -127,8 +127,13 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
       if (filterProperty !== 'all') {
         query = query.eq('property_id', filterProperty)
       }
-      if (filterMonth) {
-        query = query.eq('accounting_month', filterMonth)
+      if (filterMonth && filterMonth !== 'all') {
+        // Si filterMonth est une année (ex: '2024'), on filtre par année
+        if (/^\d{4}$/.test(filterMonth)) {
+          query = query.ilike('accounting_month', `${filterMonth}-%`)
+        } else {
+          query = query.eq('accounting_month', filterMonth)
+        }
       }
       if (searchQuery) {
         query = query.or(`description.ilike.%${searchQuery}%,property.name.ilike.%${searchQuery}%`)

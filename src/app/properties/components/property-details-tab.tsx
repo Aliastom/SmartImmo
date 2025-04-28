@@ -17,21 +17,47 @@ export function PropertyDetailsTab({ property, propertyId }: PropertyDetailsTabP
       <CardContent>
         <div className="mb-4 grid grid-cols-2 gap-4">
           <div>
+            <div className="text-xs text-gray-500">ADRESSE</div>
+            <div>{property?.address || "Non spécifiée"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500">VILLE</div>
+            <div>{property?.city || "Non spécifiée"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500">CODE POSTAL</div>
+            <div>{property?.postal_code || "Non spécifié"}</div>
+          </div>
+          <div>
             <div className="text-xs text-gray-500">TYPE</div>
             <div>{property?.type || "Non spécifié"}</div>
           </div>
           <div>
             <div className="text-xs text-gray-500">SURFACE</div>
-            <div>{property?.area ? property.area + " m²" : "Non spécifié"}</div>
+            <div>{property?.area ? property.area + " m²" : "Non spécifiée"}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500">NOMBRE DE CHAMBRES</div>
-            <div>{property?.bedrooms ?? "Non spécifié"}</div>
+            <div className="text-xs text-gray-500">STATUT</div>
+            <div>{property?.status ? <span className={`px-2 py-1 rounded text-xs ${property.status === 'vacant' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>{property.status === 'vacant' ? 'Vacant' : 'Loué'}</span> : "Non spécifié"}</div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500">NOMBRE DE SALLES DE BAIN</div>
-            <div>{property?.bathrooms ?? "Non spécifié"}</div>
-          </div>
+          {/* Lien Airbnb stylé si présent */}
+          {property?.airbnb_listing_url && (
+            <div className="col-span-2">
+              <div className="text-xs text-gray-500">ANNONCE AIRBNB</div>
+              <a
+                href={property.airbnb_listing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-1 mt-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-medium transition"
+              >
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block">
+                  <circle cx="9" cy="9" r="7" />
+                  <path d="M6 12l3-6 3 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Voir l'annonce Airbnb
+              </a>
+            </div>
+          )}
         </div>
         <div className="mt-6">
           <div className="font-semibold text-lg mb-2">Photos par pièce</div>

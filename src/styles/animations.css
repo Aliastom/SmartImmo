@@ -1,0 +1,12 @@
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(.8,0,1,1); }
+  20% { transform: translateY(-12px); animation-timing-function: cubic-bezier(0,0,.2,1); }
+  40% { transform: translateY(-24px); animation-timing-function: cubic-bezier(0,0,.2,1); }
+  50% { transform: translateY(-18px); animation-timing-function: cubic-bezier(0,0,.2,1); }
+  60% { transform: translateY(-8px); animation-timing-function: cubic-bezier(0,0,.2,1); }
+  80% { transform: translateY(-4px); animation-timing-function: cubic-bezier(.8,0,1,1); }
+}
+.animate-sparkle {
+  animation: bounce 1.3s infinite;
+  display: inline-block;
+}

@@ -10,13 +10,14 @@ import { PropertyModal } from '../components/property-modal'
 import { LeaseModal } from '../components/lease-modal'
 import { useToast } from "@/components/ui/use-toast"
 import { formatCurrency } from '@/lib/utils'
-import { TransactionModal } from '../transaction-modal'
+import { TransactionModal } from '../transaction-modal.tsxremove'
 import { PropertyTransactions } from '../components/property-transactions'
 import { PropertyLoans } from '../components/property-loans'
 import { PropertyDocuments } from '../components/property-documents'
 import { motion } from 'framer-motion'
 import { PageTransition, AnimatedCard, LoadingSpinner } from '@/components/ui/animated'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import RendementLocatif from '../components/RendementLocatif';
 
 // Type pour la propriété avec les champs étendus
 interface ExtendedProperty {
@@ -581,6 +582,18 @@ export default function ClientPage({ id }: ClientPageProps) {
             )}
           </Tabs>
         </div>
+      )}
+
+      {/* Rendement locatif */}
+      {property && (
+        <RendementLocatif
+          purchasePrice={property.purchase_price || 0}
+          rent={property.rent || 0}
+          propertyTax={property.property_tax || 0}
+          housingTax={property.housing_tax || 0}
+          insurance={property.insurance_cost || 0}
+          managementFeePercentage={property.management_fee_percentage || 0}
+        />
       )}
 
       {/* Modals */}

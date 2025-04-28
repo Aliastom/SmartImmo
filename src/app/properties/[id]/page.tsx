@@ -6,11 +6,11 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PropertyModal } from '../components/property-modal'
-import { LeaseModal } from '../components/lease-modal'
+import { PropertyModal } from '../components/property-modal.tsx'
+import { LeaseModal } from '../components/lease-modal.tsx'
 import { useToast } from "@/components/ui/use-toast"
 import { formatCurrency } from '@/lib/utils'
-import TransactionModal from '../../transactions/transaction-modal'
+import TransactionModal from '../../transactions/transaction-modal.tsx'
 import { PropertyTransactions } from '../components/property-transactions'
 import { PropertyLoans } from '../components/property-loans'
 import { PropertyDocuments } from '../components/property-documents'
@@ -25,6 +25,9 @@ import { PropertyRegimeCard } from '@/components/property/property-regime-card'
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { PropertyDetailsTab } from '../components/property-details-tab'
 import { PropertyPhotosByRoom } from '../components/property-photos-by-room'
+import RendementLocatif from '../components/RendementLocatif';
+import { useBienFinancier } from '../hooks/useBienFinancier';
+import { SimpleCsvModal } from '../components/simple-csv-modal';
 
 export default function PropertyDetailPage() {
   const params = useParams()
@@ -49,6 +52,7 @@ export default function PropertyDetailPage() {
   const [totalIncome, setTotalIncome] = useState(0)
   const [totalExpense, setTotalExpense] = useState(0)
   const [balance, setBalance] = useState(0)
+  const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState(false);
 
   // Onglet actif persistant via URL
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -390,6 +394,47 @@ export default function PropertyDetailPage() {
     }
   }, [propertyId, refreshTrigger])
 
+  const userId = property?.user_id || null;
+  const bienFinancier = useBienFinancier(userId, propertyId);
+
+  // Détermination de la source de l'impôt foncier
+  let landTaxSource: 'manual' | 'auto' | 'none' = 'none';
+  if (bienFinancier) {
+    if (bienFinancier.landTax > 0 && bienFinancier.landTaxSource === 'manual') {
+      landTaxSource = 'manual';
+    } else if (bienFinancier.landTax > 0) {
+      landTaxSource = 'auto';
+    }
+  }
+
+  // Lien direct vers la page impôts (à adapter si besoin)
+  const impotsLink = '/impots';
+
+  const handleImportCsv = async (csvData: any) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { error } = await supabase
+        .from('transactions')
+        .insert(csvData);
+      if (error) throw error;
+      toast({
+        title: "Succès",
+        description: "Les transactions ont été importées avec succès",
+      });
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      console.error('Error importing transactions:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Une erreur est survenue lors de l'import",
+        variant: "destructive"
+      });
+    } finally {
+      setIsImportCsvModalOpen(false);
+    }
+  };
+
   return (
     <>
       {/* Header avec boutons de navigation */}
@@ -499,6 +544,26 @@ export default function PropertyDetailPage() {
                       </span>
                     </div>
                   </div>
+                  {property?.airbnb_listing_url && (
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <div className="text-sm font-medium text-gray-500 uppercase">Annonce Airbnb</div>
+                      <div className="col-span-2">
+                        <a
+                          href={property.airbnb_listing_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-medium transition"
+                          style={{ verticalAlign: 'middle' }}
+                        >
+                          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block">
+                            <circle cx="8" cy="8" r="7" />
+                            <path d="M6 11l2-4 2 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          Voir l'annonce Airbnb
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </AnimatedCard>
@@ -519,26 +584,28 @@ export default function PropertyDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-sm font-medium text-gray-500 uppercase">Loyer mensuel</div>
-                    <div className="col-span-2">{property?.rent ? formatCurrency(property.rent) : 'Non spécifié'}</div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between"><span>Loyer mensuel</span><span>{property?.rent ? formatCurrency(property.rent) : 'Non spécifié'}</span></div>
+                    <div className="flex justify-between"><span>Charges</span><span>{property?.charges ? formatCurrency(property.charges) : 'Non spécifiées'}</span></div>
+                    <div className="flex justify-between"><span>Taxe foncière</span><span>{property?.property_tax ? formatCurrency(property.property_tax) : 'Non spécifiée'}</span></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-sm font-medium text-gray-500 uppercase">Charges</div>
-                    <div className="col-span-2">{property?.expenses ? formatCurrency(property.expenses) : 'Non spécifiées'}</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-sm font-medium text-gray-500 uppercase">Taxe foncière</div>
-                    <div className="col-span-2">{property?.property_tax ? formatCurrency(property.property_tax) : 'Non spécifiée'}</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-sm font-medium text-gray-500 uppercase">Rendement</div>
-                    <div className="col-span-2">
-                      {property?.purchase_price && property?.rent
-                        ? `${((property.rent * 12) / property.purchase_price * 100).toFixed(2)}%`
-                        : 'Non calculable'}
-                    </div>
-                  </div>
+                  {/* Ajout du composant de rendement locatif personnalisé */}
+                  {property && bienFinancier && (
+                    <RendementLocatif
+                      purchasePrice={property.purchase_price || 0}
+                      rent={bienFinancier.loyerAnnuel / 12}
+                      propertyTax={property.property_tax || 0}
+                      housingTax={property.housing_tax || 0}
+                      insurance={property.insurance_cost || 0}
+                      managementFeePercentage={property.management_fee_percentage || 0}
+                      acquisitionFees={property.acquisition_fees || 0}
+                      landTax={bienFinancier.landTax}
+                      loyerAnnuel={bienFinancier.loyerAnnuel}
+                      chargesAnnuelles={bienFinancier.chargesAnnuelles}
+                      landTaxSource={landTaxSource}
+                      impotsLink={impotsLink}
+                    />
+                  )}
                 </div>
               </CardContent>
             </AnimatedCard>
@@ -556,7 +623,23 @@ export default function PropertyDetailPage() {
               </TabsList>
               
               <TabsContent value="transactions">
+                {/* Bouton Import CSV */}
+                {false && (
+                  <div className="flex justify-end items-center mb-4">
+                    <Button
+                      variant="outline"
+                      className="ml-2"
+                      onClick={() => setIsImportCsvModalOpen(true)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Importer CSV
+                    </Button>
+                  </div>
+                )}
                 <PropertyTransactions 
+                  property={property}
                   propertyId={propertyId} 
                   onAddTransaction={() => setIsModalOpen(true)}
                   onDuplicateTransaction={handleDuplicateTransaction}
@@ -592,6 +675,13 @@ export default function PropertyDetailPage() {
                     }
                   }}
                   refreshTrigger={refreshTrigger}
+                />
+                {/* Modal Import CSV */}
+                <SimpleCsvModal
+                  open={isImportCsvModalOpen}
+                  onClose={() => setIsImportCsvModalOpen(false)}
+                  onImport={handleImportCsv}
+                  existingTransactions={[]}
                 />
               </TabsContent>
               

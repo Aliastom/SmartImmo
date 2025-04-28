@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import TransactionModal from "./transaction-modal"
+import TransactionModal from "./transaction-modal.tsx"
 import { TransactionTable } from "./transaction-table"
 import { motion } from 'framer-motion'
 import { PageTransition, AnimatedCard } from '@/components/ui/animated'
@@ -18,7 +18,7 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState("all")
   const [filterCategory, setFilterCategory] = useState("all")
   const [filterProperty, setFilterProperty] = useState("all")
-  const [filterMonth, setFilterMonth] = useState("all")
+  const [filterMonth, setFilterMonth] = useState("")
   const [categories, setCategories] = useState<{ id: string, name: string }[]>([])
   const [types, setTypes] = useState<{ id: string, name: string }[]>([])
   const [properties, setProperties] = useState<{ id: string, name: string }[]>([])
@@ -26,7 +26,7 @@ export default function TransactionsPage() {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [balance, setBalance] = useState(0);
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchFilters() {
@@ -97,15 +97,7 @@ export default function TransactionsPage() {
     setTotalIncome(income);
     setTotalExpense(expense);
     setBalance(income - expense);
-    // Toujours garder toutes les années déjà vues
-    const yearsFromTx = Array.from(new Set(transactions.map(t => Number(t.accounting_month?.slice(0, 4))))).filter(Boolean);
-    setAvailableYears(prevYears => {
-      const allYears = Array.from(new Set([...prevYears, ...yearsFromTx])).sort((a, b) => b - a);
-      if (JSON.stringify(prevYears) !== JSON.stringify(allYears)) {
-        return allYears;
-      }
-      return prevYears;
-    });
+    setTransactions(transactions);
   };
 
   return (
@@ -201,7 +193,7 @@ export default function TransactionsPage() {
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <span className="text-sm text-gray-600">Filtrer :</span>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <Select value={filterCategory && filterCategory !== '' ? filterCategory : 'all'} onValueChange={val => setFilterCategory(val === '' ? 'all' : val)}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Catégorie" />
               </SelectTrigger>
@@ -212,7 +204,7 @@ export default function TransactionsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
+            <Select value={filterType && filterType !== '' ? filterType : 'all'} onValueChange={val => setFilterType(val === '' ? 'all' : val)}>
               <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -223,28 +215,38 @@ export default function TransactionsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterProperty} onValueChange={setFilterProperty}>
+            <Select value={filterProperty && filterProperty !== '' ? filterProperty : 'all'} onValueChange={val => setFilterProperty(val === '' ? 'all' : val)}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Bien" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous biens</SelectItem>
+                <SelectItem value="all">Tous les biens</SelectItem>
                 {properties.map(prop => (
                   <SelectItem key={prop.id} value={prop.id}>{prop.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="w-[140px]">
+            <Select
+              value={filterMonth.slice(0,4) || ''}
+              onValueChange={year => setFilterMonth(year ? `${year}` : '')}
+            >
+              <SelectTrigger className="w-[100px]">
                 <SelectValue placeholder="Année" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes années</SelectItem>
-                {availableYears.map(year => (
-                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                <SelectItem value="">Toutes années</SelectItem>
+                {Array.from(new Set(transactions.map(t => t.accounting_month?.slice(0,4)).filter(Boolean))).sort().reverse().map(year => (
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <Input
+              type="month"
+              className="w-[140px]"
+              value={filterMonth}
+              onChange={e => setFilterMonth(e.target.value)}
+              placeholder="Mois comptable"
+            />
           </div>
         </motion.div>
 

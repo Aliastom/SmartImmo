@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useEffect, useState, useRef } from "react"
 import { motion } from 'framer-motion'
 import { useParams } from 'next/navigation';
-import TransactionFormFields from './components/TransactionFormFields';
+import TransactionFormFields from './components/TransactionFormFields.tsx';
 
 interface TransactionModalProps {
   isOpen: boolean
@@ -22,9 +22,12 @@ interface TransactionModalProps {
   propertyId?: string
 }
 
+// Nouvelle version de Property avec categoryName
 interface Property {
   id: string
   name: string
+  category?: string
+  categoryName?: string // Ajouté pour le mapping front
 }
 
 export default function TransactionModal({ isOpen, onClose, transactionId, transactionToClone, propertyId }: TransactionModalProps) {
@@ -45,7 +48,13 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     amount: '',
     date: today,
     accounting_month: currentMonth,
-    description: ''
+    description: '',
+    platform: '',
+    reservation_ref: '',
+    guest_name: '',
+    notes: '',
+    start_date: '',
+    end_date: ''
   })
   const { toast } = useToast()
 
@@ -92,123 +101,11 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     fetchCategoriesAndTypes();
   }, [isOpen, supabase]);
 
-  // Correction du handleCategoryChange pour sélectionner automatiquement le premier type disponible
-  const handleCategoryChange = async (categoryId: string) => {
-    setFormData(prev => ({ ...prev, category: categoryId, type: '' }));
-    setFetchError(null);
-    try {
-      const { data: typesData, error: typeError } = await supabase
-        .from('types')
-        .select('*')
-        .eq('active', true)
-        .eq('category_id', categoryId);
-      if (typeError) throw typeError;
-      setTypes(typesData || []);
-      // Sélection auto du premier type
-      if (typesData && typesData.length > 0) {
-        setFormData(prev => ({ ...prev, type: typesData[0].id }));
-      } else {
-        setFormData(prev => ({ ...prev, type: '' }));
-      }
-    } catch (err: any) {
-      setFetchError("Erreur lors du chargement des types.");
-      setTypes([]);
-      setFormData(prev => ({ ...prev, type: '' }));
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      const fetchProperties = async () => {
-        try {
-          // First get the current session
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-          
-          if (sessionError || !session) {
-            console.error('Erreur de session:', sessionError)
-            return
-          }
-          
-          // Then fetch properties for this user
-          const { data: propertiesData, error: propertiesError } = await supabase
-            .from('properties')
-            .select('id, name')
-            .eq('user_id', session.user.id)
-            .order('name', { ascending: true })
-          
-          if (propertiesError) {
-            console.error('Erreur lors de la récupération des propriétés:', propertiesError)
-            return
-          }
-          
-          setProperties(propertiesData || [])
-          
-          // If we have a transactionId, fetch the transaction
-          if (transactionId) {
-            fetchTransaction()
-          } else if (propertyId) {
-            setFormData(prev => ({
-              ...prev,
-              property_id: propertyId
-            }))
-          } else if (propertiesData && propertiesData.length > 0 && !formData.property_id) {
-            // Sélectionner la première propriété par défaut
-            setFormData(prev => ({
-              ...prev,
-              property_id: propertiesData[0].id
-            }))
-          }
-        } catch (error) {
-          console.error('Erreur lors du chargement des propriétés:', error)
-        }
-      }
-      
-      fetchProperties()
-    }
-  }, [isOpen, transactionId, transactionToClone, propertyId, supabase])
-  
-  // Fetch transaction details when editing
-  const fetchTransaction = async () => {
-    if (!transactionId) return
-    
-    try {
-      setIsLoading(true)
-      
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', transactionId)
-        .single()
-      
-      if (error) {
-        console.error('Erreur lors de la récupération de la transaction:', error)
-        return
-      }
-      
-      if (data) {
-        setFormData({
-          property_id: data.property_id || '',
-          transaction_type: data.transaction_type || '',
-          category: data.category || '',
-          type: data.type || '',
-          amount: data.amount?.toString() || '',
-          date: data.date || today,
-          accounting_month: data.accounting_month || currentMonth,
-          description: data.description || ''
-        })
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération de la transaction:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-  
   // --- Initialisation robuste du formulaire lors de l'édition ou de la duplication ---
   useEffect(() => {
     if (!isOpen || (!transactionId && !transactionToClone)) return;
     let cancelled = false;
-    const init = async () => {
+    const doInit = async () => {
       setIsLoading(true);
       try {
         let baseTransaction = null;
@@ -251,28 +148,30 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
           if (property) {
             switch (valeurPourPreRemplissage) {
               case 'loyer':
-                montant = property.rent?.toString() || '';
+                montant = property.rent?.toString() || '0';
                 break;
               case 'taxe foncière':
               case 'taxe_fonciere':
-                montant = property.property_tax?.toString() || '';
+                montant = property.property_tax?.toString() || '0';
                 break;
               case 'taxe habitation':
               case 'taxe_habitation':
-                montant = property.habitation_tax?.toString() || '';
+                montant = property.habitation_tax?.toString() || '0';
                 break;
               case 'assurance':
-                montant = property.insurance?.toString() || '';
+                montant = property.insurance?.toString() || '0';
                 break;
               case 'frais de gestion':
               case 'frais_gestion':
                 if (property.rent && property.management_fee_percentage) {
                   const mgmt = (property.rent * property.management_fee_percentage) / 100;
                   montant = mgmt.toFixed(2);
+                } else {
+                  montant = '0';
                 }
                 break;
               default:
-                montant = '';
+                montant = '0';
             }
           }
         }
@@ -283,10 +182,17 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
             transaction_type: baseTransaction.transaction_type || '',
             category: baseTransaction.category || '',
             type: typeId,
-            amount: montant || baseTransaction.amount?.toString() || '',
+            // Correction: priorité à baseTransaction.amount si présent (cas édition), sinon fallback montant calculé
+            amount: baseTransaction.amount?.toString() || montant || '',
             date: transactionId ? (baseTransaction.date || today) : today,
             accounting_month: transactionId ? (baseTransaction.accounting_month || currentMonth) : currentMonth,
-            description: baseTransaction.description || ''
+            description: baseTransaction.description || '',
+            platform: baseTransaction.platform || '',
+            reservation_ref: baseTransaction.reservation_ref || '',
+            guest_name: baseTransaction.guest_name || '',
+            notes: baseTransaction.notes || '',
+            start_date: baseTransaction.start_date || '',
+            end_date: baseTransaction.end_date || ''
           });
           setFormInitialized(true);
         }
@@ -294,11 +200,66 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
         setIsLoading(false);
       }
     };
-    init();
+    doInit();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, transactionId, transactionToClone]);
-  
+  }, [isOpen, transactionId, transactionToClone, propertyId, supabase, categories]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchProperties = async () => {
+        try {
+          // First get the current session
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+          
+          if (sessionError || !session) {
+            console.error('Erreur de session:', sessionError)
+            return
+          }
+          
+          // Then fetch properties for this user
+          const { data: propertiesData, error: propertiesError } = await supabase
+            .from('properties')
+            .select('id, name, category')
+            .eq('user_id', session.user.id)
+            .order('name', { ascending: true })
+          
+          if (propertiesError) {
+            console.error('Erreur lors de la récupération des propriétés:', propertiesError)
+            return
+          }
+          
+          // On mappe l'id de catégorie vers son nom
+          const mapped = (propertiesData || []).map((p: any) => ({
+            ...p,
+            categoryName: categories.find((c: any) => c.id === p.category)?.name || ''
+          }));
+          setProperties(mapped);
+          
+          // If we have a transactionId, fetch the transaction
+          if (transactionId) {
+            // init()
+          } else if (propertyId) {
+            setFormData(prev => ({
+              ...prev,
+              property_id: propertyId
+            }))
+          } else if (propertiesData && propertiesData.length > 0 && !formData.property_id) {
+            // Sélectionner la première propriété par défaut
+            setFormData(prev => ({
+              ...prev,
+              property_id: propertiesData[0].id
+            }))
+          }
+        } catch (error) {
+          console.error('Erreur lors du chargement des propriétés:', error)
+        }
+      };
+      fetchProperties();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, transactionId, transactionToClone, propertyId, supabase, categories]);
+
   useEffect(() => {
     if (!isOpen) setFormInitialized(false);
   }, [isOpen]);
@@ -472,6 +433,8 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
         ...formData,
         amount: parseFloat(formData.amount),
         user_id: user.id, // Ajoute l'ID de l'utilisateur ici !
+        start_date: formData.start_date?.trim() ? formData.start_date : null,
+        end_date: formData.end_date?.trim() ? formData.end_date : null,
       }
       let transactionRes
       if (transactionId) {
@@ -606,14 +569,14 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, propertyIdFromUrl, properties]);
 
-  // Effet pour préremplir le montant selon la catégorie, le type et la propriété (en utilisant les labels)
+  // --- Effet de préremplissage automatique montant ---
   useEffect(() => {
-    if (!formData.property_id) return;
-    // On attend que le type soit bien défini ET présent dans la liste
-    const selectedType = types.find(type => type.id === formData.type);
-    if (!formData.type || !selectedType) return;
-    const selectedCategory = categories.find(cat => cat.id === formData.category);
-    const valeurPourPreRemplissage = (selectedType?.name || selectedCategory?.name || '').toLowerCase();
+    // Ne jamais préremplir lors de l’édition d’une transaction !
+    if (transactionId) return;
+    // Ne préremplir que si toutes les infos nécessaires sont là
+    if (!formData.property_id || !formData.category || !formData.type || !formData.transaction_type) return;
+    const selectedType = types.find(t => t.id === formData.type);
+    const valeurPourPreRemplissage = (selectedType?.name || '').toLowerCase();
     const fetchAndPrefillAmount = async () => {
       try {
         const { data: property, error } = await supabase
@@ -622,41 +585,47 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
           .eq('id', formData.property_id)
           .single();
         if (error || !property) return;
-        let montant = '';
-        switch (valeurPourPreRemplissage) {
-          case 'loyer':
-            montant = property.rent?.toString() || '';
-            break;
-          case 'taxe foncière':
-          case 'taxe_fonciere':
-            montant = property.property_tax?.toString() || '';
-            break;
-          case 'taxe habitation':
-          case 'taxe_habitation':
-            montant = property.habitation_tax?.toString() || '';
-            break;
-          case 'assurance':
-            montant = property.insurance?.toString() || '';
-            break;
-          case 'frais de gestion':
-          case 'frais_gestion':
-            if (property.rent && property.management_fee_percentage) {
-              const mgmt = (property.rent * property.management_fee_percentage) / 100;
-              montant = mgmt.toFixed(2);
-            }
-            break;
-          // Ajoute ici d'autres types/catégories si besoin
-          default:
-            montant = '';
+        if (formData.transaction_type === 'income' && valeurPourPreRemplissage === 'loyer') {
+          setFormData(prev => ({ ...prev, amount: property.rent?.toString() || '0' }));
+        } else if (formData.transaction_type === 'expense') {
+          let montant = '0';
+          switch (valeurPourPreRemplissage) {
+            case 'taxe foncière':
+            case 'taxe_fonciere':
+              montant = property.property_tax?.toString() || '0';
+              break;
+            case 'taxe habitation':
+            case 'taxe_habitation':
+              montant = property.habitation_tax?.toString() || '0';
+              break;
+            case 'assurance':
+            case 'quittance assurance':
+            case 'quittance_assurance':
+              montant = property.insurance?.toString() || '0';
+              break;
+            case 'frais de gestion':
+            case 'frais_gestion':
+              if (property.rent && property.management_fee_percentage) {
+                const mgmt = (property.rent * property.management_fee_percentage) / 100;
+                montant = mgmt.toFixed(2);
+              } else {
+                montant = '0';
+              }
+              break;
+            default:
+              montant = '0';
+          }
+          setFormData(prev => ({ ...prev, amount: montant }));
+        } else {
+          setFormData(prev => ({ ...prev, amount: '0' }));
         }
-        setFormData(prev => ({ ...prev, amount: montant }));
       } catch (err) {
         // Rien à faire
       }
     };
     fetchAndPrefillAmount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.property_id, formData.category, formData.type, categories, types]);
+  }, [formData.property_id, formData.category, formData.type, formData.transaction_type, categories, types, transactionId]);
 
   // Effet pour sélectionner automatiquement le premier type disponible dès que la liste des types change (utile après changement de catégorie)
   useEffect(() => {
@@ -690,10 +659,30 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     }
   }, [transactionId, formInitialized, categories, types]);
 
-  // Affichage conditionnel du formulaire : masquer tant que tout n'est pas prêt
-  const isReadyToShowForm = (!transactionId && !transactionToClone) || (
-    categories.length > 0 && properties.length > 0 && formInitialized
-  );
+  // --- Correction du handleCategoryChange pour sélectionner automatiquement le premier type disponible
+  const handleCategoryChange = async (categoryId: string) => {
+    setFormData(prev => ({ ...prev, category: categoryId, type: '' }));
+    setFetchError(null);
+    try {
+      const { data: typesData, error: typeError } = await supabase
+        .from('types')
+        .select('*')
+        .eq('active', true)
+        .eq('category_id', categoryId);
+      if (typeError) throw typeError;
+      setTypes(typesData || []);
+      // Sélection auto du premier type
+      if (typesData && typesData.length > 0) {
+        setFormData(prev => ({ ...prev, type: typesData[0].id }));
+      } else {
+        setFormData(prev => ({ ...prev, type: '' }));
+      }
+    } catch (err: any) {
+      setFetchError("Erreur lors du chargement des types.");
+      setTypes([]);
+      setFormData(prev => ({ ...prev, type: '' }));
+    }
+  };
 
   function AttachmentLink({ filePath, fileName }: { filePath: string, fileName: string }) {
     const [signedUrl, setSignedUrl] = useState<string>("");
@@ -710,6 +699,11 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
     if (!signedUrl) return <span>Chargement...</span>;
     return <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{fileName}</a>;
   }
+
+  // Affichage conditionnel du formulaire : masquer tant que tout n'est pas prêt
+  const isReadyToShowForm = (!transactionId && !transactionToClone) || (
+    categories.length > 0 && properties.length > 0 && formInitialized
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

@@ -22,6 +22,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/client-layout.tsx", "src/app/layout.tsxremove", "src/app/loading.tsxremove", "src/components/sidebar/sidebar.tsxremove", "src/app/properties/transaction-modal.tsxremove", "src/app/properties/delete-modal.tsxremove", "src/app/properties/debug-transaction.tsxremove", "src/app/properties/[id]/client-page.tsxremove", "src/app/transactions/transaction-modal.tsx", "src/app/properties/[id]/page-temp.tsxremove", "src/app/properties/[id]/page-new.tsxremove", "src/app/properties/components/lease-modal.tsx", "src/app/properties/components/property-modal.tsx", "src/app/transactions/components/TransactionFormFields.tsx"],
   "exclude": ["node_modules"]
 }

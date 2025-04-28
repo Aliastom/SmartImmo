@@ -84,9 +84,11 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
     insurance: '',
     management_fee_percentage: '',
     loan_interest: '',
-    category: 'Bien locatif' as 'Résidence principale' | 'Résidence secondaire' | 'Bien locatif' | 'Autre',
+    category: 'Bien locatif' as 'Résidence principale' | 'Résidence secondaire' | 'Bien locatif' | 'Saisonnière/Airbnb' | 'Autre',
     purchase_date: '',
-    property_regime_id: null as string | null
+    purchase_price: '',
+    property_regime_id: null as string | null,
+    airbnb_listing_url: '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -163,7 +165,9 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
         loan_interest: parseFloat(formData.loan_interest) || null,
         category: formData.category,
         purchase_date: formData.purchase_date || null,
-        property_regime_id: formData.property_regime_id
+        purchase_price: parseFloat(formData.purchase_price) || 0,
+        property_regime_id: formData.property_regime_id,
+        airbnb_listing_url: formData.airbnb_listing_url || null,
       }
 
       if (propertyData.area <= 0) throw new Error("La surface doit être un nombre positif")
@@ -363,7 +367,9 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           loan_interest: '',
           category: 'Bien locatif',
           purchase_date: '',
-          property_regime_id: null
+          purchase_price: '',
+          property_regime_id: null,
+          airbnb_listing_url: '',
         })
         return
       }
@@ -400,7 +406,9 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           loan_interest: data.loan_interest?.toString() || '',
           category: data.category || 'Bien locatif',
           purchase_date: data.purchase_date || '',
-          property_regime_id: data.property_regime_id || null
+          purchase_price: data.purchase_price?.toString() || '',
+          property_regime_id: data.property_regime_id || null,
+          airbnb_listing_url: data.airbnb_listing_url || '',
         })
         
         if (data.image_url && data.image_url !== '/images/placeholder-property.jpg') {
@@ -449,15 +457,17 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                     <td className="p-3">
                       <Select
                         value={formData.category}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, category: value as any }))}
+                        onValueChange={val => setFormData(prev => ({ ...prev, category: val }))}
+                        disabled={isLoading}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Catégorie" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Résidence principale">Résidence principale</SelectItem>
                           <SelectItem value="Résidence secondaire">Résidence secondaire</SelectItem>
                           <SelectItem value="Bien locatif">Bien locatif</SelectItem>
+                          <SelectItem value="Saisonnière/Airbnb">Saisonnière/Airbnb</SelectItem>
                           <SelectItem value="Autre">Autre</SelectItem>
                         </SelectContent>
                       </Select>
@@ -477,34 +487,14 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                   </tr>
                   <tr>
                     <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Adresse</td>
-                    <td className="p-3" style={{ position: 'relative' }}>
+                    <td className="p-3">
                       <Input
                         id="address"
-                        value={addressInput}
-                        onChange={e => {
-                          setAddressInput(e.target.value);
-                          setFormData(prev => ({ ...prev, address: e.target.value }));
-                        }}
+                        value={formData.address}
+                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                        required
                         placeholder="ex: 123 rue de la Paix, 75000 Paris"
-                        autoComplete="off"
-                        className="border-0 shadow-none focus-visible:ring-0 p-0"
                       />
-                      {suggestionsVisible && addressSuggestions.length > 0 && (
-                        <ul className="bg-white border rounded shadow mt-1 max-h-52 overflow-auto z-50 absolute left-0 right-0" style={{ top: '100%' }}>
-                          {addressSuggestions.map((feature) => (
-                            <li
-                              key={feature.properties.id}
-                              className="px-3 py-2 hover:bg-blue-100 cursor-pointer text-sm"
-                              onClick={() => handleSelectAddress(feature)}
-                            >
-                              {feature.properties.label}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {addressLoading && (
-                        <div className="absolute left-0 right-0 mt-1 text-xs text-gray-400 p-2 bg-white border rounded shadow">Chargement...</div>
-                      )}
                     </td>
                   </tr>
                   <tr>
@@ -625,6 +615,20 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                       </div>
                     </td>
                   </tr>
+                  {formData.category === 'Saisonnière/Airbnb' && (
+                    <tr>
+                      <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Lien vers l'annonce Airbnb</td>
+                      <td className="p-3">
+                        <Input
+                          id="airbnb_listing_url"
+                          type="url"
+                          value={formData.airbnb_listing_url}
+                          onChange={(e) => setFormData(prev => ({ ...prev, airbnb_listing_url: e.target.value }))}
+                          placeholder="https://www.airbnb.fr/rooms/12345678"
+                        />
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </TabsContent>
@@ -776,7 +780,18 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                   onChange={(e) => setFormData(prev => ({ ...prev, purchase_date: e.target.value }))}
                 />
               </div>
-
+              <div className="space-y-2">
+                <Label htmlFor="purchase_price">Prix d'achat (€)</Label>
+                <Input
+                  id="purchase_price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.purchase_price}
+                  onChange={(e) => setFormData(prev => ({ ...prev, purchase_price: e.target.value }))}
+                  placeholder="ex: 250000"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="value">Valeur actuelle estimée (€)</Label>
                 <div className="flex items-center gap-2">

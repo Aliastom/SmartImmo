@@ -23,7 +23,7 @@ interface TransactionModalProps {
 }
 
 type TransactionType = 'income' | 'expense'
-type TransactionCategory = 'loyer' | 'taxe_fonciere' | 'taxe_ordures' | 'assurance' | 'frais_gestion' | 'reparation' | 'autre'
+type TransactionCategory = 'loyer' | 'taxe_fonciere' | 'taxe_ordures' | 'assurance' | 'quittance_assurance' | 'frais_gestion' | 'reparation' | 'autre'
 
 interface TransactionForm {
   date: string
@@ -31,9 +31,12 @@ interface TransactionForm {
   category: TransactionCategory
   amount: number
   description: string
+  start_date?: string
+  end_date?: string
 }
 
 export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdded, transactionToClone, setTransactionToClone }: TransactionModalProps) {
+  console.log('DEBUG TransactionModal RENDER')
   const supabase = createClientComponentClient<Database>()
   const { toast } = useToast()
   const [formData, setFormData] = useState<TransactionForm>({
@@ -41,7 +44,9 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
     type: 'income',
     category: 'loyer',
     amount: 0,
-    description: ''
+    description: '',
+    start_date: '',
+    end_date: ''
   })
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingProperty, setIsLoadingProperty] = useState(true)
@@ -55,6 +60,7 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
     { value: 'taxe_fonciere', label: 'Taxe foncière' },
     { value: 'taxe_ordures', label: "Taxe d'ordures ménagères (OM)" },
     { value: 'assurance', label: 'Assurance' },
+    { value: 'quittance_assurance', label: 'Quittance assurance' },
     { value: 'frais_gestion', label: 'Frais de gestion' },
     { value: 'reparation', label: 'Réparation' },
     { value: 'autre', label: 'Autre' },
@@ -99,7 +105,9 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
             type: transactionToClone.type,
             category: transactionToClone.category,
             amount: transactionToClone.amount,
-            description: transactionToClone.description || ''
+            description: transactionToClone.description || '',
+            start_date: transactionToClone.start_date || '',
+            end_date: transactionToClone.end_date || ''
           })
           setAccountingMonth(new Date().toISOString().slice(0, 7)) // Utiliser le mois en cours
         } 
@@ -126,6 +134,9 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
 
     let amount = 0 // Valeur par défaut à 0 pour toutes les catégories
 
+    // DEBUG LOG
+    console.log('DEBUG prefillAmount:', formData, 'insurance:', propertyDetails.insurance)
+
     // Préremplir en fonction de la catégorie et du type
     if (formData.type === 'income' && formData.category === 'loyer') {
       // Pour les revenus de type loyer, utiliser le montant du loyer de la propriété
@@ -133,14 +144,17 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
     } else if (formData.type === 'income' && formData.category === 'taxe_ordures') {
       // Pour la taxe d'ordures ménagères, utiliser la valeur si elle existe
       amount = propertyDetails.waste_tax || 0
+    } else if (
+      (formData.type === 'expense' && formData.category === 'assurance') ||
+      (formData.type === 'expense' && formData.category === 'quittance_assurance')
+    ) {
+      // Préremplir le montant d'assurance pour la catégorie quittance_assurance
+      amount = propertyDetails.insurance || 0
     } else if (formData.type === 'expense') {
       // Pour les dépenses, utiliser les montants des charges récurrentes
       switch (formData.category) {
         case 'taxe_fonciere':
           amount = propertyDetails.property_tax || 0
-          break
-        case 'assurance':
-          amount = propertyDetails.insurance || 0
           break
         case 'frais_gestion':
           // Calculer les frais de gestion en fonction du pourcentage
@@ -163,6 +177,7 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
 
   // Appeler prefillAmount lorsque le type ou la catégorie change
   useEffect(() => {
+    console.log('DEBUG useEffect triggered:', formData, propertyDetails)
     if (propertyDetails) {
       prefillAmount()
     }
@@ -196,20 +211,35 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
         throw new Error("Vous n'avez pas les droits pour ajouter une transaction à ce bien")
       }
 
+      // Construction dynamique de l'objet transaction pour ne PAS envoyer les dates vides
+      const transactionPayload: any = {
+        property_id: propertyId,
+        type: formData.type,
+        category: formData.category,
+        amount: Number(formData.amount),
+        date: formData.date,
+        accounting_month: accountingMonth,
+        description: formData.description,
+      };
+      // Ajout explicite de null si vide
+      if (typeof formData.start_date === 'string' && formData.start_date.trim() !== '') {
+        transactionPayload.start_date = formData.start_date;
+      } else {
+        transactionPayload.start_date = null;
+      }
+      if (typeof formData.end_date === 'string' && formData.end_date.trim() !== '') {
+        transactionPayload.end_date = formData.end_date;
+      } else {
+        transactionPayload.end_date = null;
+      }
+      // Debug : vérifier le payload final
+      console.log('Payload envoyé à Supabase:', transactionPayload);
+
       // Créer la transaction
       const { data: transaction, error: transactionError } = await supabase
         .from('transactions')
         .insert([
-          {
-            date: formData.date,
-            type: formData.type,
-            category: formData.category,
-            amount: Number(formData.amount),
-            description: formData.description || '',
-            property_id: propertyId,
-            user_id: session.user.id,
-            accounting_month: accountingMonth
-          }
+          transactionPayload
         ])
         .select()
 
@@ -228,7 +258,9 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
         type: 'income',
         category: 'loyer',
         amount: propertyDetails?.rent || 0,
-        description: ''
+        description: '',
+        start_date: '',
+        end_date: ''
       })
       setAccountingMonth(new Date().toISOString().slice(0, 7))
 
@@ -282,8 +314,13 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
                   </td>
                   <td className="p-3">
                     <Select
+                      id="type"
                       value={formData.type}
-                      onValueChange={(value: TransactionType) => setFormData({ ...formData, type: value })}
+                      onValueChange={(value) => {
+                        console.log('DEBUG onTypeChange:', value)
+                        setFormData({ ...formData, type: value as TransactionType })
+                      }}
+                      required
                     >
                       <SelectTrigger id="type" className="h-10 border-0">
                         <SelectValue placeholder="Type de transaction" />
@@ -307,8 +344,13 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
                   </td>
                   <td className="p-3">
                     <Select
+                      id="category"
                       value={formData.category}
-                      onValueChange={(value) => setFormData({ ...formData, category: value as TransactionCategory })}
+                      onValueChange={(value) => {
+                        console.log('DEBUG onCategoryChange:', value)
+                        setFormData({ ...formData, category: value as TransactionCategory })
+                      }}
+                      required
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Sélectionner une catégorie" />
@@ -350,7 +392,47 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
                   <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase">
                     <div className="flex items-center space-x-2">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 4v10a2 2 0 002 2h6a2 2 0 002-2V7" />
+                      </svg>
+                      <span>Date début</span>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={formData.start_date || ''}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      className="h-10 border-0"
+                    />
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase">
+                    <div className="flex items-center space-x-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 17v-1a4 4 0 00-8 0v1" />
+                      </svg>
+                      <span>Date fin</span>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={formData.end_date || ''}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      className="h-10 border-0"
+                    />
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase">
+                    <div className="flex items-center space-x-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 4v10a2 2 0 002 2h6a2 2 0 002-2V7" />
                       </svg>
                       <span>Date</span>
                     </div>
@@ -371,7 +453,7 @@ export function TransactionModal({ isOpen, onClose, propertyId, onTransactionAdd
                   <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase">
                     <div className="flex items-center space-x-2">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                       <span>Mois comptable</span>
                     </div>

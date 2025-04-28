@@ -1,6 +1,6 @@
 import { Inter } from 'next/font/google'
 import './globals.css'
-import ClientLayout from './client-layout'
+import ClientLayout from './client-layout.tsx'
 import Script from 'next/script';
 import GlobalLoader from "@/components/ui/global-loader";
 

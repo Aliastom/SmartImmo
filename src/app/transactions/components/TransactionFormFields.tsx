@@ -3,12 +3,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { ComboboxPlatform } from "@/components/ui/combobox-platform";
 import { motion } from "framer-motion";
 import React, { useRef, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 
-interface Property { id: string; name: string; }
+interface Property { id: string; name: string; category?: string; categoryName?: string; }
 
 interface TransactionFormFieldsProps {
   formData: any;
@@ -71,6 +72,10 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
     if (firstInputRef.current) firstInputRef.current.focus();
   }, []);
 
+  // Détection du bien saisonnier/Airbnb
+  const selectedProperty = properties.find(p => p.id === formData.property_id);
+  const isSaisonnier = selectedProperty && ((selectedProperty.categoryName && selectedProperty.categoryName.toLowerCase().includes('saison')) || (selectedProperty.category && selectedProperty.category.toLowerCase().includes('saison')));
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* HEADER PRINCIPAL */}
@@ -102,7 +107,7 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
         <div>
           <Label htmlFor="property_id" className="mb-2 block">Bien</Label>
           <Select
-            value={formData.property_id}
+            value={formData.property_id || undefined}
             onValueChange={val => setFormData((prev: any) => ({ ...prev, property_id: val }))}
             disabled={isLoading || properties.length === 0}
           >
@@ -121,7 +126,7 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
         <div>
           <Label htmlFor="transaction_type" className="mb-2 block">Type de transaction</Label>
           <Select
-            value={formData.transaction_type}
+            value={formData.transaction_type || undefined}
             onValueChange={val => setFormData((prev: any) => ({ ...prev, transaction_type: val }))}
             disabled={isLoading}
           >
@@ -129,6 +134,7 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Tous</SelectItem>
               <SelectItem value="income">Revenu</SelectItem>
               <SelectItem value="expense">Dépense</SelectItem>
             </SelectContent>
@@ -137,14 +143,15 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
         <div>
           <Label htmlFor="category" className="mb-2 block">Catégorie</Label>
           <Select
-            value={formData.category}
+            value={formData.category || 'all'}
             onValueChange={val => handleCategoryChange(val)}
             disabled={isLoading || categories.length === 0}
           >
             <SelectTrigger id="category">
-              <SelectValue placeholder="Catégorie" />
+              <SelectValue placeholder="Sélectionnez une catégorie" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Toutes</SelectItem>
               {categories.map((category) => (
                 <SelectItem key={category.id} value={category.id}>
                   {category.name}
@@ -156,7 +163,7 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
         <div>
           <Label htmlFor="type" className="mb-2 block">Type</Label>
           <Select
-            value={formData.type}
+            value={formData.type || 'all'}
             onValueChange={val => setFormData((prev: any) => ({ ...prev, type: val }))}
             disabled={isLoading || types.length === 0}
           >
@@ -164,6 +171,7 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Tous</SelectItem>
               {types.map((type) => (
                 <SelectItem key={type.id} value={type.id}>
                   {type.name}
@@ -220,6 +228,82 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
       </div>
       {/* SÉPARATEUR */}
       <div className="h-4"></div>
+      {/* Champs spécifiques Airbnb/Saisonnière */}
+      {isSaisonnier && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <div>
+            <Label htmlFor="platform">Plateforme</Label>
+            <ComboboxPlatform
+              value={formData.platform || ''}
+              onChange={val => setFormData((prev: any) => ({ ...prev, platform: val }))}
+              placeholder="ex: Airbnb, Booking, Abritel..."
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label htmlFor="reservation_ref">Référence réservation</Label>
+            <Input
+              id="reservation_ref"
+              placeholder="ex: ABC12345"
+              value={formData.reservation_ref || ''}
+              onChange={e => setFormData((prev: any) => ({ ...prev, reservation_ref: e.target.value }))}
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label htmlFor="start_date">Date début (période)</Label>
+            <Input
+              id="start_date"
+              type="date"
+              value={formData.start_date ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                setFormData((prev: any) => ({
+                  ...prev,
+                  start_date: v === '' ? null : v
+                }));
+              }}
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label htmlFor="end_date">Date fin (période)</Label>
+            <Input
+              id="end_date"
+              type="date"
+              value={formData.end_date ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                setFormData((prev: any) => ({
+                  ...prev,
+                  end_date: v === '' ? null : v
+                }));
+              }}
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label htmlFor="guest_name">Nom du voyageur (optionnel)</Label>
+            <Input
+              id="guest_name"
+              placeholder="Prénom Nom"
+              value={formData.guest_name || ''}
+              onChange={e => setFormData((prev: any) => ({ ...prev, guest_name: e.target.value }))}
+              disabled={isLoading}
+            />
+          </div>
+          <div>
+            <Label htmlFor="notes">Notes (optionnel)</Label>
+            <Input
+              id="notes"
+              placeholder="Infos complémentaires"
+              value={formData.notes || ''}
+              onChange={e => setFormData((prev: any) => ({ ...prev, notes: e.target.value }))}
+              disabled={isLoading}
+            />
+          </div>
+        </div>
+      )}
       {/* GROUPE DESCRIPTION & ATTACHMENTS */}
       <div>
         <Label htmlFor="description">Description</Label>

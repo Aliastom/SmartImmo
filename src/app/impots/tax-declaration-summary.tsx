@@ -33,12 +33,20 @@ export function TaxDeclarationSummary() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       // Charger la déclaration sauvegardée
-      const { data: declaration } = await supabase
+      const { data: declaration, error: declarationError } = await supabase
         .from('tax_declarations')
-        .select('*')
+        .select('id, user_id, year, salary, foncier_net, impot_calcule, data, created_at, updated_at, impot_par_bien')
         .eq('user_id', session.user.id)
         .eq('year', year)
-        .single();
+        .maybeSingle();
+
+      if (declarationError) {
+        console.error('Erreur Supabase tax_declarations:', declarationError);
+        setSaveMsg('Erreur lors de la récupération de la déclaration fiscale : ' + declarationError.message);
+        setIsLoading(false);
+        return;
+      }
+
       let salaryFromDeclaration = null;
       if (declaration) {
         setDeclarationId(declaration.id);
@@ -191,9 +199,14 @@ export function TaxDeclarationSummary() {
     };
     let result;
     if (declarationId) {
-      result = await supabase.from('tax_declarations').update(payload).eq('id', declarationId).select();
+      result = await supabase.from('tax_declarations')
+        .update(payload)
+        .eq('id', declarationId)
+        .select('id, user_id, year, salary, foncier_net, impot_calcule, data, created_at, updated_at, impot_par_bien');
     } else {
-      result = await supabase.from('tax_declarations').insert([payload]).select();
+      result = await supabase.from('tax_declarations')
+        .insert([payload])
+        .select('id, user_id, year, salary, foncier_net, impot_calcule, data, created_at, updated_at, impot_par_bien');
     }
     if (result.error) {
       setSaveMsg("Erreur lors de l'enregistrement : " + result.error.message);

@@ -11,7 +11,7 @@ const navigation = [
   { name: 'Biens', href: '/properties', icon: '🏠' },
   { name: 'Locataires', href: '/tenants', icon: '👥' },
   { name: 'Transactions', href: '/transactions', icon: '💰' },
-  { name: 'Impôts', href: '/impots', icon: '📝' },
+  { name: 'Impôts', href: '/impots-premium', icon: '📝' },
 ]
 
 export function Sidebar() {

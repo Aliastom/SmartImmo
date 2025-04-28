@@ -15,7 +15,7 @@ const navigation = [
   { name: 'Transactions', href: '/transactions', icon: '💰' },
   { name: 'Documents', href: '/documents', icon: '📁' },
   { name: 'Régimes Fiscaux', href: '/regimes', icon: '📋' },
-  { name: 'Impôts', href: '/impots', icon: '📑' },
+  { name: 'Impôts', href: '/impots-premium', icon: '📑' },
   { name: 'Profil', href: '/profile', icon: '👤' },
 ]
 

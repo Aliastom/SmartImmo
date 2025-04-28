@@ -89,6 +89,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
     purchase_price: '',
     property_regime_id: null as string | null,
     airbnb_listing_url: '',
+    acquisition_fees: '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -168,6 +169,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
         purchase_price: parseFloat(formData.purchase_price) || 0,
         property_regime_id: formData.property_regime_id,
         airbnb_listing_url: formData.airbnb_listing_url || null,
+        acquisition_fees: parseFloat(formData.acquisition_fees) || 0,
       }
 
       if (propertyData.area <= 0) throw new Error("La surface doit être un nombre positif")
@@ -370,6 +372,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           purchase_price: '',
           property_regime_id: null,
           airbnb_listing_url: '',
+          acquisition_fees: '',
         })
         return
       }
@@ -409,6 +412,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           purchase_price: data.purchase_price?.toString() || '',
           property_regime_id: data.property_regime_id || null,
           airbnb_listing_url: data.airbnb_listing_url || '',
+          acquisition_fees: data.acquisition_fees?.toString() || '',
         })
         
         if (data.image_url && data.image_url !== '/images/placeholder-property.jpg') {
@@ -446,33 +450,12 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="general">Général</TabsTrigger>
               <TabsTrigger value="financial">Finances</TabsTrigger>
-              <TabsTrigger value="expenses">Charges</TabsTrigger>
+              <TabsTrigger value="acquisition">Acquisition</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="space-y-4 pt-4">
               <table className="w-full border-collapse">
                 <tbody>
-                  <tr>
-                    <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Catégorie</td>
-                    <td className="p-3">
-                      <Select
-                        value={formData.category}
-                        onValueChange={val => setFormData(prev => ({ ...prev, category: val }))}
-                        disabled={isLoading}
-                      >
-                        <SelectTrigger id="category">
-                          <SelectValue placeholder="Catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Résidence principale">Résidence principale</SelectItem>
-                          <SelectItem value="Résidence secondaire">Résidence secondaire</SelectItem>
-                          <SelectItem value="Bien locatif">Bien locatif</SelectItem>
-                          <SelectItem value="Saisonnière/Airbnb">Saisonnière/Airbnb</SelectItem>
-                          <SelectItem value="Autre">Autre</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
                   <tr>
                     <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Nom du bien</td>
                     <td className="p-3">
@@ -487,14 +470,31 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                   </tr>
                   <tr>
                     <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Adresse</td>
-                    <td className="p-3">
+                    <td className="p-3 relative">
                       <Input
                         id="address"
-                        value={formData.address}
-                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                        value={addressInput}
+                        onChange={e => setAddressInput(e.target.value)}
                         required
+                        autoComplete="off"
                         placeholder="ex: 123 rue de la Paix, 75000 Paris"
                       />
+                      {suggestionsVisible && addressSuggestions.length > 0 && (
+                        <ul className="absolute z-10 bg-white border border-gray-200 rounded w-full max-h-48 overflow-y-auto shadow-lg mt-1">
+                          {addressLoading && (
+                            <li className="px-2 py-1 text-gray-400">Chargement...</li>
+                          )}
+                          {addressSuggestions.map((feature, idx) => (
+                            <li
+                              key={idx}
+                              className="px-2 py-1 hover:bg-gray-100 cursor-pointer"
+                              onClick={() => handleSelectAddress(feature)}
+                            >
+                              {feature.properties.label}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </td>
                   </tr>
                   <tr>
@@ -633,144 +633,163 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
               </table>
             </TabsContent>
 
-            <TabsContent value="financial" className="space-y-4 mt-4">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <tbody>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3 w-1/3">
-                        Loyer mensuel (€)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="rent"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.rent}
-                          onChange={(e) => setFormData(prev => ({ ...prev, rent: e.target.value }))}
-                          required={formData.category === 'Bien locatif'}
-                          placeholder="ex: 1200"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Régime fiscal
-                      </td>
-                      <td className="p-3">
-                        <PropertyRegimeSelector
-                          selectedRegimeId={formData.property_regime_id}
-                          onRegimeChange={(regimeId) => setFormData(prev => ({ ...prev, property_regime_id: regimeId }))}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3"></td>
-                      <td className="p-3">
-                        <a
-                          href="/regimes"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline text-sm"
-                        >
-                          Besoin d'aide ? Voir la liste et le détail des régimes fiscaux
-                        </a>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Taxe foncière annuelle (€)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="property_tax"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.property_tax}
-                          onChange={(e) => setFormData(prev => ({ ...prev, property_tax: e.target.value }))}
-                          placeholder="ex: 1200"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Taxe d'habitation annuelle (€)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="housing_tax"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.housing_tax}
-                          onChange={(e) => setFormData(prev => ({ ...prev, housing_tax: e.target.value }))}
-                          placeholder="ex: 800"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Assurance habitation annuelle (€)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="insurance"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.insurance}
-                          onChange={(e) => setFormData(prev => ({ ...prev, insurance: e.target.value }))}
-                          placeholder="ex: 300"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Frais de gestion (%)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="management_fee_percentage"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={formData.management_fee_percentage}
-                          onChange={(e) => setFormData(prev => ({ ...prev, management_fee_percentage: e.target.value }))}
-                          placeholder="ex: 7"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
-                        Intérêts d'emprunt annuels (€)
-                      </td>
-                      <td className="p-3">
-                        <Input
-                          id="loan_interest"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.loan_interest}
-                          onChange={(e) => setFormData(prev => ({ ...prev, loan_interest: e.target.value }))}
-                          placeholder="ex: 3600"
-                          className="border-0 shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <TabsContent value="financial" className="space-y-4 pt-4">
+              <table className="w-full border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Catégorie</td>
+                    <td className="p-3">
+                      <Select
+                        value={formData.category}
+                        onValueChange={val => setFormData(prev => ({ ...prev, category: val }))}
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Catégorie" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Résidence principale">Résidence principale</SelectItem>
+                          <SelectItem value="Résidence secondaire">Résidence secondaire</SelectItem>
+                          <SelectItem value="Bien locatif">Bien locatif</SelectItem>
+                          <SelectItem value="Saisonnière/Airbnb">Saisonnière/Airbnb</SelectItem>
+                          <SelectItem value="Autre">Autre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3 w-1/3">
+                      Loyer mensuel (€)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="rent"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.rent}
+                        onChange={(e) => setFormData(prev => ({ ...prev, rent: e.target.value }))}
+                        required={formData.category === 'Bien locatif'}
+                        placeholder="ex: 1200"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Régime fiscal
+                    </td>
+                    <td className="p-3">
+                      <PropertyRegimeSelector
+                        selectedRegimeId={formData.property_regime_id}
+                        onRegimeChange={(regimeId) => setFormData(prev => ({ ...prev, property_regime_id: regimeId }))}
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3"></td>
+                    <td className="p-3">
+                      <a
+                        href="/regimes"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline text-sm"
+                      >
+                        Besoin d'aide ? Voir la liste et le détail des régimes fiscaux
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Taxe foncière annuelle (€)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="property_tax"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.property_tax}
+                        onChange={(e) => setFormData(prev => ({ ...prev, property_tax: e.target.value }))}
+                        placeholder="ex: 1200"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Taxe d'habitation annuelle (€)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="housing_tax"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.housing_tax}
+                        onChange={(e) => setFormData(prev => ({ ...prev, housing_tax: e.target.value }))}
+                        placeholder="ex: 800"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Assurance habitation annuelle (€)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="insurance"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.insurance}
+                        onChange={(e) => setFormData(prev => ({ ...prev, insurance: e.target.value }))}
+                        placeholder="ex: 300"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Frais de gestion (%)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="management_fee_percentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={formData.management_fee_percentage}
+                        onChange={(e) => setFormData(prev => ({ ...prev, management_fee_percentage: e.target.value }))}
+                        placeholder="ex: 7"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-100 text-gray-600 uppercase text-xs font-medium p-3">
+                      Intérêts d'emprunt annuels (€)
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        id="loan_interest"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.loan_interest}
+                        onChange={(e) => setFormData(prev => ({ ...prev, loan_interest: e.target.value }))}
+                        placeholder="ex: 3600"
+                        className="border-0 shadow-none focus-visible:ring-0 p-0"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </TabsContent>
 
-            <TabsContent value="expenses" className="space-y-4 pt-4">
+            <TabsContent value="acquisition" className="space-y-4 pt-4">
               <div className="space-y-2">
                 <Label htmlFor="purchase_date">Date d'achat</Label>
                 <Input
@@ -790,6 +809,18 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                   value={formData.purchase_price}
                   onChange={(e) => setFormData(prev => ({ ...prev, purchase_price: e.target.value }))}
                   placeholder="ex: 250000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acquisition_fees">Frais d'acquisition (€)</Label>
+                <Input
+                  id="acquisition_fees"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.acquisition_fees}
+                  onChange={(e) => setFormData(prev => ({ ...prev, acquisition_fees: e.target.value }))}
+                  placeholder="ex: 10000"
                 />
               </div>
               <div className="space-y-2">

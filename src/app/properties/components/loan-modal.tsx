@@ -35,7 +35,9 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
     payment_day: '',
     loan_type: 'Prêt immobilier',
     notes: '',
-    loan_duration_years: '20'
+    loan_duration_years: '20',
+    repayment_type: 'amortissable', // 'amortissable' ou 'in fine'
+    amortization_profile: 'constant', // 'constant' ou 'classique' (nouveau champ)
   })
   const [isLoading, setIsLoading] = useState(false)
 
@@ -55,7 +57,9 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
           payment_day: '',
           loan_type: 'Prêt immobilier',
           notes: '',
-          loan_duration_years: '20'
+          loan_duration_years: '20',
+          repayment_type: 'amortissable',
+          amortization_profile: 'constant',
         })
         return
       }
@@ -95,7 +99,9 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
           payment_day: data.payment_day?.toString() || '',
           loan_type: data.loan_type || 'Prêt immobilier',
           notes: data.notes || '',
-          loan_duration_years: loanDurationYears
+          loan_duration_years: loanDurationYears,
+          repayment_type: data.repayment_type || 'amortissable',
+          amortization_profile: data.amortization_profile || 'constant',
         })
       } catch (error) {
         console.error('Error:', error)
@@ -303,7 +309,9 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
         remaining_capital,
         payment_day,
         loan_type: formData.loan_type,
-        notes: formData.notes
+        notes: formData.notes,
+        repayment_type: formData.repayment_type,
+        amortization_profile: formData.amortization_profile,
       }
 
       let result
@@ -386,6 +394,41 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="repayment_type">Type de remboursement</Label>
+            <Select
+              value={formData.repayment_type}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, repayment_type: value }))}
+              required
+            >
+              <SelectTrigger id="repayment_type">
+                <SelectValue placeholder="Sélectionner un type de remboursement" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="amortissable">Prêt classique (remboursement progressif)</SelectItem>
+                <SelectItem value="in fine">Prêt in fine</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {formData.repayment_type === 'amortissable' && (
+            <div className="space-y-2 mt-2">
+              <Label htmlFor="amortization_profile">Profil d'amortissement</Label>
+              <Select
+                value={formData.amortization_profile}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, amortization_profile: value }))}
+                required
+              >
+                <SelectTrigger id="amortization_profile">
+                  <SelectValue placeholder="Sélectionner un profil d'amortissement" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="classique">Mensualités constantes (annuité classique)</SelectItem>
+                  <SelectItem value="constant">Amortissement constant (mensualités dégressives)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

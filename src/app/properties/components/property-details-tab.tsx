@@ -18,7 +18,7 @@ export function PropertyDetailsTab({ property, propertyId }: PropertyDetailsTabP
         <div className="mb-4 grid grid-cols-2 gap-4">
           <div>
             <div className="text-xs text-gray-500">ADRESSE</div>
-            <div>{property?.address || "Non spécifiée"}</div>
+            <div>{property?.address?.replace(`${property?.postal_code || ''} ${property?.city || ''}`, '').replace(`${property?.postal_code || ''}`, '').replace(`${property?.city || ''}`, '').replace(/\s*,\s*$/, '').trim() || "Non spécifiée"}</div>
           </div>
           <div>
             <div className="text-xs text-gray-500">VILLE</div>
@@ -101,6 +101,41 @@ export function PropertyDetailsTab({ property, propertyId }: PropertyDetailsTabP
             </div>
             <PropertyPhoto propertyId={propertyId} propertyName="Autre" />
           </div>
+        </div>
+        {/* ENCAR FINANCES */}
+        <div className="mt-6">
+          <div className="font-semibold text-lg mb-2">Finances</div>
+          {/* Calculs */}
+          {(() => {
+            const loyerMensuel = Number(property?.rent) || 0;
+            const loyerAnnuel = loyerMensuel * 12;
+            const taxeF = Number(property?.property_tax) || 0;
+            const taxeH = Number(property?.housing_tax) || 0;
+            const assurance = Number(property?.insurance) || 0;
+            const fraisGestionPct = Number(property?.management_fee_percentage) || 0;
+            const interetsEmprunt = Number(property?.loan_interest) || 0;
+            const fraisGestion = loyerAnnuel * (fraisGestionPct / 100);
+            const chargesDeductibles = taxeF + taxeH + assurance + fraisGestion + interetsEmprunt;
+            const resultatNet = loyerAnnuel - chargesDeductibles;
+            return (
+              <div className="bg-gray-50 rounded-lg p-4 border mb-4">
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Revenu foncier brut</span>
+                    <span className="font-semibold">{loyerAnnuel.toLocaleString()} € / an</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Charges annuelles déductibles</span>
+                    <span className="font-semibold">{chargesDeductibles.toLocaleString()} € / an</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Résultat net avant impôt</span>
+                    <span className="font-semibold">{resultatNet.toLocaleString()} € / an</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </CardContent>
     </Card>

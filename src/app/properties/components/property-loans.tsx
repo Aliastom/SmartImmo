@@ -8,6 +8,8 @@ import { Database } from '@/types/database'
 import { useToast } from '@/components/ui/use-toast'
 import { LoanModal } from './loan-modal'
 import { LoanChart } from './loan-chart'
+import { InterestDetailsTable } from './interest-details-table';
+import { computeYearlyInterests } from '../utils/interest-details';
 import { motion, AnimatePresence } from 'framer-motion'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -28,9 +30,10 @@ type Loan = Database['public']['Tables']['loans']['Row']
 
 interface PropertyLoansProps {
   propertyId: string
+  purchasePrice?: number
 }
 
-export function PropertyLoans({ propertyId }: PropertyLoansProps) {
+export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps) {
   const supabase = createClientComponentClient<Database>()
   const { toast } = useToast()
   const [loans, setLoans] = useState<Loan[]>([])
@@ -83,6 +86,15 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
   useEffect(() => {
     fetchLoans()
   }, [propertyId, supabase])
+
+  // Calcule l'apport initial
+  const totalLoanAmount = loans.reduce((sum, loan) => sum + (Number(loan.amount) || 0), 0)
+  const apport = purchasePrice !== undefined ? Math.max(0, purchasePrice - totalLoanAmount) : null
+
+  // Détermination de la période à afficher
+  const minYear = loans.length > 0 ? Math.min(...loans.map(l => l.start_date ? new Date(l.start_date).getFullYear() : 2100)) : new Date().getFullYear();
+  const maxYear = loans.length > 0 ? Math.max(...loans.map(l => l.end_date ? new Date(l.end_date).getFullYear() : 1900)) : new Date().getFullYear();
+  const interestTableData = computeYearlyInterests(loans, minYear, maxYear);
 
   const handleAddLoan = () => {
     setSelectedLoanId(undefined)
@@ -182,6 +194,13 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
           <div>
             <CardTitle>Emprunts rattachés</CardTitle>
             <CardDescription>Gérez les emprunts liés à ce bien immobilier</CardDescription>
+            {purchasePrice !== undefined && (
+              <div className="mt-2 p-2 rounded bg-gray-50 text-sm">
+                <span>Apport initial calculé : </span>
+                <span className="font-bold">{apport?.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}</span>
+                <span className="text-gray-500 text-xs ml-2">(Prix d'achat {purchasePrice.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })} - Crédit {totalLoanAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })})</span>
+              </div>
+            )}
           </div>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button onClick={handleAddLoan} className="bg-black hover:bg-black/80 text-white">
@@ -212,47 +231,44 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
               animate="visible"
               className="space-y-4"
             >
-              {loans.map((loan) => (
-                <motion.div key={loan.id} variants={itemVariants}>
-                  <Card className="overflow-hidden">
-                    <CardContent className="p-0">
-                      <div className="p-4">
-                        <div className="flex justify-between items-start">
+              {loans.map((loan) => {
+                // Calcul du coût total du crédit
+                const monthly = Number(loan.monthly_payment) || 0;
+                const months = loan.start_date && loan.end_date
+                  ? Math.max(1, Math.round((new Date(loan.end_date).getFullYear() - new Date(loan.start_date).getFullYear()) * 12 + (new Date(loan.end_date).getMonth() - new Date(loan.start_date).getMonth()) + 1))
+                  : 0;
+                const totalPaid = monthly * months;
+                const creditCost = totalPaid - (Number(loan.amount) || 0);
+                return (
+                  <motion.div key={loan.id} variants={itemVariants}>
+                    <Card className="shadow-none border border-gray-200">
+                      <CardContent className="pt-4 pb-2">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                           <div>
-                            <h3 className="text-lg font-medium">{loan.name}</h3>
-                            <Badge className={`mt-1 ${getLoanTypeColor(loan.loan_type)}`}>
-                              {loan.loan_type}
-                            </Badge>
-                          </div>
-                          <div className="flex space-x-2">
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleEditLoan(loan.id)}
-                              >
-                                Modifier
+                            <div className="mt-1 flex items-center gap-1">
+                              <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-700 font-semibold text-xs border border-green-200 shadow-sm">
+                                Montant emprunté&nbsp;:
+                                <span className="ml-1 font-bold text-base">
+                                  {formatCurrency(loan.amount)}
+                                </span>
+                              </span>
+                              <Button variant="outline" size="icon" className="ml-2" title="Modifier l'emprunt" onClick={() => handleEditLoan(loan.id)}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 10-4-4l-8 8v3z" />
+                                </svg>
                               </Button>
-                            </motion.div>
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="text-red-500 hover:text-red-700 border-red-200 hover:border-red-300"
-                                onClick={() => handleDeleteLoan(loan.id)}
-                              >
-                                Supprimer
-                              </Button>
-                            </motion.div>
-                          </div>
-                        </div>
-                        
-                        <Separator className="my-3" />
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-                          <div>
-                            <p className="text-sm text-gray-500">Montant emprunté</p>
-                            <p className="font-medium">{formatCurrency(loan.amount)}</p>
+                            </div>
+                            {creditCost > 0 && (
+                              <div className="mt-1 flex items-center gap-1">
+                                <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-700 font-semibold text-xs border border-red-200 shadow-sm">
+                                  Coût total du crédit&nbsp;:
+                                  <span className="ml-1 font-bold text-base">
+                                    {creditCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                                  </span>
+                                </span>
+                                <span className="ml-2 text-xs text-gray-400" title="Intérêts payés sur toute la durée du prêt (hors assurance)">(intérêts sur {months} mois)</span>
+                              </div>
+                            )}
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Taux d'intérêt</p>
@@ -267,8 +283,8 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
                             <p className="font-medium">{formatCurrency(loan.remaining_capital)}</p>
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mt-3">
+                        <Separator className="my-3" />
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
                           <div>
                             <p className="text-sm text-gray-500">Date de début</p>
                             <p className="font-medium">
@@ -282,14 +298,12 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
                             </p>
                           </div>
                         </div>
-                        
                         {loan.notes && (
                           <div className="mt-3">
                             <p className="text-sm text-gray-500">Notes</p>
                             <p className="text-sm mt-1">{loan.notes}</p>
                           </div>
                         )}
-
                         {/* Graphique prévisionnel */}
                         {loan.monthly_payment && loan.amount && loan.interest_rate && (
                           <LoanChart 
@@ -303,15 +317,17 @@ export function PropertyLoans({ propertyId }: PropertyLoansProps) {
                             paymentDay={loan.payment_day ?? null}
                           />
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           )}
         </CardContent>
       </Card>
+
+      <InterestDetailsTable data={interestTableData} />
 
       <LoanModal
         isOpen={isLoanModalOpen}

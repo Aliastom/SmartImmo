@@ -296,7 +296,7 @@ export default function ClientPage({ id }: ClientPageProps) {
               transition={{ duration: 0.3 }}
             >
               <h1 className="text-3xl font-bold text-gray-800">{property?.name}</h1>
-              <p className="text-gray-500 mt-1">{property?.address}</p>
+              <p className="text-gray-500 mt-1">{property?.address?.replace(`${property?.postal_code || ''} ${property?.city || ''}`, '').replace(`${property?.postal_code || ''}`, '').replace(`${property?.city || ''}`, '').replace(/\s*,\s*$/, '').trim() || "Non spécifiée"}</p>
             </motion.div>
             
             <motion.div 

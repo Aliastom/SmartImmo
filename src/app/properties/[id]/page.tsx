@@ -28,6 +28,7 @@ import { PropertyPhotosByRoom } from '../components/property-photos-by-room'
 import RendementLocatif from '../components/RendementLocatif';
 import { useBienFinancier } from '../hooks/useBienFinancier';
 import { SimpleCsvModal } from '../components/simple-csv-modal';
+import RentabiliteTab from '../components/rentabilite-tab';
 
 export default function PropertyDetailPage() {
   const params = useParams()
@@ -36,6 +37,7 @@ export default function PropertyDetailPage() {
   const { toast } = useToast()
   const supabase = createClientComponentClient<Database>()
   const [property, setProperty] = useState<any | null>(null)
+  const [loans, setLoans] = useState<any[]>([])
   const [currentTenant, setCurrentTenant] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -78,31 +80,27 @@ export default function PropertyDetailPage() {
           description: "Veuillez vous reconnecter",
           variant: "destructive"
         })
-        router.push('/login')
+        setIsLoading(false)
         return
       }
 
-      // Récupérer les détails de la propriété
+      // Récupérer le bien
       const { data: propertyData, error: propertyError } = await supabase
         .from('properties')
         .select('*')
         .eq('id', propertyId)
-        .eq('user_id', session.user.id)
         .single()
-
       if (propertyError) throw propertyError
-      
-      if (!propertyData) {
-        toast({
-          title: "Bien non trouvé",
-          description: "Ce bien n'existe pas ou vous n'avez pas les droits pour y accéder",
-          variant: "destructive"
-        })
-        router.push('/properties')
-        return
-      }
-
       setProperty(propertyData)
+
+      // Récupérer les crédits liés à ce bien
+      const { data: loansData, error: loansError } = await supabase
+        .from('loans')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('user_id', session.user.id)
+      setLoans(loansData || [])
+      // Pas de throw sur loansError, les crédits sont optionnels
 
       // Récupérer le locataire actuel et son bail
       const { data: leaseData, error: leaseError } = await supabase
@@ -147,11 +145,10 @@ export default function PropertyDetailPage() {
       } else {
         setCurrentTenant(null)
       }
-    } catch (error: any) {
-      console.error('Error:', error)
+    } catch (error) {
       toast({
         title: "Erreur",
-        description: error.message || "Une erreur est survenue",
+        description: "Impossible de charger les données du bien ou des crédits",
         variant: "destructive"
       })
     } finally {
@@ -160,10 +157,9 @@ export default function PropertyDetailPage() {
   }
 
   useEffect(() => {
-    if (propertyId) {
-      fetchPropertyDetails()
-    }
-  }, [propertyId, refreshTrigger])
+    fetchPropertyDetails()
+    // eslint-disable-next-line
+  }, [propertyId])
 
   const handleRemoveTenant = async () => {
     if (!currentTenant || !property) return
@@ -191,7 +187,7 @@ export default function PropertyDetailPage() {
 
       setCurrentTenant(null)
       setRefreshTrigger(prev => prev + 1)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error:', error)
       toast({
         title: "Erreur",
@@ -227,7 +223,7 @@ export default function PropertyDetailPage() {
           description: "Veuillez vous reconnecter",
           variant: "destructive"
         })
-        router.push('/login')
+        setIsLoading(false)
         return
       }
 
@@ -262,7 +258,7 @@ export default function PropertyDetailPage() {
       }
       
       reader.readAsDataURL(file)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error:', error)
       toast({
         title: "Erreur",
@@ -283,9 +279,9 @@ export default function PropertyDetailPage() {
     await fetchPropertyDetails(); // recharge la propriété ET le bail à jour
   }
 
-  const handlePropertyUpdated = () => {
-    setRefreshTrigger(prev => prev + 1)
-  }
+  const handlePropertyUpdated = async () => {
+    await fetchPropertyDetails();
+  };
 
   const handleModalClose = (saved?: boolean) => {
     setIsModalOpen(false)
@@ -330,7 +326,7 @@ export default function PropertyDetailPage() {
       })
 
       router.push('/properties')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error:', error)
       toast({
         title: "Erreur",
@@ -423,7 +419,7 @@ export default function PropertyDetailPage() {
         description: "Les transactions ont été importées avec succès",
       });
       setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error importing transactions:', error);
       toast({
         title: "Erreur",
@@ -516,7 +512,7 @@ export default function PropertyDetailPage() {
                 <div className="space-y-2">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="text-sm font-medium text-gray-500 uppercase">Adresse</div>
-                    <div className="col-span-2">{property?.address || 'Non spécifiée'}</div>
+                    <div className="col-span-2">{property?.address?.replace(`${property?.postal_code || ''} ${property?.city || ''}`, '').replace(`${property?.postal_code || ''}`, '').replace(`${property?.city || ''}`, '').replace(/\s*,\s*$/, '').trim() || 'Non spécifiée'}</div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="text-sm font-medium text-gray-500 uppercase">Ville</div>
@@ -580,30 +576,60 @@ export default function PropertyDetailPage() {
 
             <AnimatedCard delay={0.3}>
               <CardHeader className="pb-2">
-                <CardTitle>Finances</CardTitle>
+                <CardTitle>Finances annuelles estimatives</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between"><span>Loyer mensuel</span><span>{property?.rent ? formatCurrency(property.rent) : 'Non spécifié'}</span></div>
-                    <div className="flex justify-between"><span>Charges</span><span>{property?.charges ? formatCurrency(property.charges) : 'Non spécifiées'}</span></div>
-                    <div className="flex justify-between"><span>Taxe foncière</span><span>{property?.property_tax ? formatCurrency(property.property_tax) : 'Non spécifiée'}</span></div>
-                  </div>
-                  {/* Ajout du composant de rendement locatif personnalisé */}
-                  {property && bienFinancier && (
+                  {property ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Loyer annuel</span>
+                        <span>{property.rent ? formatCurrency(property.rent * 12) : 'Non spécifié'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Charges annuelles déductibles</span>
+                        <span>{formatCurrency((Number(property.property_tax) || 0)
+                          + (Number(property.housing_tax) || 0)
+                          + (Number(property.insurance) || 0)
+                          + (Number(property.management_fee_percentage ? (property.rent * 12 * property.management_fee_percentage / 100) : 0))
+                          + (Number(property.loan_interest) || 0)
+                        )}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold">
+                        <span>Résultat net avant impôt</span>
+                        <span>{property.rent ? formatCurrency(
+                          (property.rent * 12)
+                          - ((Number(property.property_tax) || 0)
+                            + (Number(property.housing_tax) || 0)
+                            + (Number(property.insurance) || 0)
+                            + (Number(property.management_fee_percentage ? (property.rent * 12 * property.management_fee_percentage / 100) : 0))
+                            + (Number(property.loan_interest) || 0)
+                          )
+                        ) : 'Non spécifié'}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-muted-foreground">Aucune donnée disponible</div>
+                  )}
+                  {/* Ajout du composant de rendement locatif personnalisé si besoin */}
+                  {property && (
                     <RendementLocatif
                       purchasePrice={property.purchase_price || 0}
-                      rent={bienFinancier.loyerAnnuel / 12}
-                      propertyTax={property.property_tax || 0}
-                      housingTax={property.housing_tax || 0}
-                      insurance={property.insurance_cost || 0}
-                      managementFeePercentage={property.management_fee_percentage || 0}
-                      acquisitionFees={property.acquisition_fees || 0}
-                      landTax={bienFinancier.landTax}
-                      loyerAnnuel={bienFinancier.loyerAnnuel}
-                      chargesAnnuelles={bienFinancier.chargesAnnuelles}
-                      landTaxSource={landTaxSource}
-                      impotsLink={impotsLink}
+                      rent={property.rent || 0}
+                      propertyTax={Number(property.property_tax) || 0}
+                      housingTax={Number(property.housing_tax) || 0}
+                      insurance={Number(property.insurance) || 0}
+                      managementFeePercentage={Number(property.management_fee_percentage) || 0}
+                      acquisitionFees={Number(property.acquisition_fees) || 0}
+                      landTax={Number(property.land_tax) || 0}
+                      loyerAnnuel={property.rent ? property.rent * 12 : 0}
+                      chargesAnnuelles={
+                        (Number(property.property_tax) || 0)
+                        + (Number(property.housing_tax) || 0)
+                        + (Number(property.insurance) || 0)
+                        + (Number(property.management_fee_percentage ? (property.rent * 12 * property.management_fee_percentage / 100) : 0))
+                        + (Number(property.loan_interest) || 0)
+                      }
                     />
                   )}
                 </div>
@@ -620,6 +646,7 @@ export default function PropertyDetailPage() {
                 <TabsTrigger value="tenant">Locataire</TabsTrigger>
                 <TabsTrigger value="regime">Régime fiscal</TabsTrigger>
                 <TabsTrigger value="details">Détails</TabsTrigger>
+                <TabsTrigger value="rentabilite">Rentabilité</TabsTrigger>
               </TabsList>
               
               <TabsContent value="transactions">
@@ -664,7 +691,7 @@ export default function PropertyDetailPage() {
                           description: "La transaction a été supprimée avec succès"
                         });
                         setRefreshTrigger(prev => prev + 1);
-                      } catch (error: any) {
+                      } catch (error) {
                         console.error('Error deleting transaction:', error);
                         toast({
                           title: "Erreur",
@@ -686,7 +713,7 @@ export default function PropertyDetailPage() {
               </TabsContent>
               
               <TabsContent value="loans">
-                <PropertyLoans propertyId={propertyId} />
+                <PropertyLoans propertyId={propertyId} purchasePrice={property?.purchase_price ? Number(property.purchase_price) : undefined} />
               </TabsContent>
               
               <TabsContent value="documents">
@@ -897,6 +924,9 @@ export default function PropertyDetailPage() {
               </TabsContent>
               <TabsContent value="details">
                 <PropertyPhotosByRoom property={property} />
+              </TabsContent>
+              <TabsContent value="rentabilite">
+                <RentabiliteTab property={property} loans={loans} />
               </TabsContent>
             </Tabs>
           </div>

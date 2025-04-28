@@ -51,7 +51,7 @@ export function PropertyTransactions({ property, propertyId, onAddTransaction, o
   const [transactionsTypes, setTransactionsTypes] = useState<any[]>([]);
   useEffect(() => {
     async function fetchTypes() {
-      const { data, error } = await supabase.from('types').select('*');
+      const { data, error } = await supabase.from('types').select('*').eq('visible', true);
       if (!error && data) setTransactionsTypes(data);
     }
     fetchTypes();
@@ -60,7 +60,7 @@ export function PropertyTransactions({ property, propertyId, onAddTransaction, o
   const [transactionsCategories, setTransactionsCategories] = useState<any[]>([]);
   useEffect(() => {
     async function fetchCategories() {
-      const { data, error } = await supabase.from('categories').select('*');
+      const { data, error } = await supabase.from('categories').select('*').eq('visible', true);
       if (!error && data) setTransactionsCategories(data);
     }
     fetchCategories();

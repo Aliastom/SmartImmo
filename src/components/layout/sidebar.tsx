@@ -27,6 +27,7 @@ export function Sidebar() {
   const [user, setUser] = useState<{ email: string; fullName?: string; avatarUrl?: string } | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuDirection, setMenuDirection] = useState<'up'|'down'>('down')
+  const [isAdmin, setIsAdmin] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   // Détecter la taille de l'écran côté client uniquement
@@ -79,6 +80,27 @@ export function Sidebar() {
       listener.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    async function checkAdmin() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setIsAdmin(false); return; }
+      const { data: users } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      setIsAdmin(users && users.role === 'admin');
+    }
+    checkAdmin();
+    // Écoute les changements d'authentification
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      checkAdmin();
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -193,6 +215,27 @@ export function Sidebar() {
             </div>
           )
         })}
+        {isAdmin && (
+          <div
+            className="my-1"
+          >
+            <Link
+              href="/admin"
+              className={cn(
+                'group flex items-center px-4 py-3 text-sm font-medium rounded-md transition-all',
+                pathname.startsWith('/admin')
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-indigo-500/30 hover:text-white'
+              )}
+              onClick={() => isMobile && setIsMobileMenuOpen(false)}
+            >
+              <span className="mr-3">
+                🛠️
+              </span>
+              Admin
+            </Link>
+          </div>
+        )}
       </nav>
       {user && (
         <div className="px-4 pb-4 border-t border-gray-800 mb-2 mt-2 flex flex-col items-start relative" ref={profileRef}>

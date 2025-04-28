@@ -68,6 +68,9 @@ export function TransactionList({ propertyId }: TransactionListProps) {
     return type === 'revenue' ? 'text-green-600' : 'text-red-600'
   }
 
+  // Ajout du filtre visible pour les catégories et types si fetch utilisé ici
+  // (À adapter selon la logique de chargement si fetch explicite)
+
   return (
     <Card className="mt-8">
       <CardHeader className="flex flex-row items-center justify-between">

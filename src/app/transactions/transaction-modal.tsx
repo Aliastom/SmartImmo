@@ -76,7 +76,8 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
         const { data: categoriesData, error: catError } = await supabase
           .from('categories')
           .select('*')
-          .eq('active', true);
+          .eq('active', true)
+          .eq('visible', true);
         if (catError) throw catError;
         setCategories(categoriesData || []);
         if (categoriesData && categoriesData.length > 0) {
@@ -86,6 +87,7 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
             .from('types')
             .select('*')
             .eq('active', true)
+            .eq('visible', true)
             .eq('category_id', firstCategoryId);
           if (typeError) throw typeError;
           setTypes(typesData || []);
@@ -127,6 +129,7 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
           .from('types')
           .select('*')
           .eq('active', true)
+          .eq('visible', true)
           .eq('category_id', baseTransaction.category);
         // 3. Sélectionner le type s'il existe, sinon le premier
         let typeId = '';
@@ -668,6 +671,7 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
         .from('types')
         .select('*')
         .eq('active', true)
+        .eq('visible', true)
         .eq('category_id', categoryId);
       if (typeError) throw typeError;
       setTypes(typesData || []);

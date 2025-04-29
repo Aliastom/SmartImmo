@@ -366,7 +366,7 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <AnimatedCard>
+              <AnimatedCard boxShadow={Number.isNaN(stats.monthlyIncome) || Number.isNaN(stats.totalExpenses) || Number.isNaN(stats.netProfit) ? undefined : undefined} delay={0.6}>
                 <CardHeader className="pb-2">
                   <CardTitle>Aperçu financier</CardTitle>
                 </CardHeader>
@@ -468,7 +468,7 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6, duration: 0.3 }}
             >
-              <AnimatedCard delay={0.6}>
+              <AnimatedCard boxShadow={Number.isNaN(stats.monthlyIncome) || Number.isNaN(stats.totalExpenses) || Number.isNaN(stats.netProfit) ? undefined : undefined} delay={0.6}>
                 <CardHeader>
                   <CardTitle>Aperçu financier</CardTitle>
                 </CardHeader>
@@ -507,7 +507,7 @@ export default function DashboardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7, duration: 0.3 }}
           >
-            <AnimatedCard delay={0.7}>
+            <AnimatedCard boxShadow={Object.values(stats).some(v => typeof v === 'number' && Number.isNaN(v)) ? undefined : undefined} delay={0.7}>
               <CardHeader>
                 <CardTitle>Prévisions financières</CardTitle>
               </CardHeader>

@@ -153,6 +153,7 @@ export function Sidebar() {
             alt="SmartImmo Logo" 
             width={35} 
             height={10} 
+            style={{ height: 'auto' }} 
             priority
           />
         </div>
@@ -171,6 +172,7 @@ export function Sidebar() {
             alt="SmartImmo Logo" 
             width={80} 
             height={24} 
+            style={{ width: 'auto', height: 'auto' }} 
             priority
           />
         </div>

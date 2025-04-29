@@ -10,7 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
 import { useToast } from '@/components/ui/use-toast'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { CreditCard, Users } from 'lucide-react'
+import { supabase } from '@/lib/supabase'; // adapte le chemin si besoin
 
 interface LoanModalProps {
   isOpen: boolean
@@ -160,7 +163,7 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
     if (startDate <= referenceDate) {
       // Nombre de mois écoulés depuis le début du prêt
       const monthsElapsed = (referenceDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                           (referenceDate.getMonth() - startDate.getMonth())
+                           referenceDate.getMonth() - startDate.getMonth()
       
       // Pour chaque mois écoulé, calculer le remboursement du capital
       let currentCapital = amount
@@ -193,6 +196,170 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
     // si l'utilisateur a modifié un des champs de base
     calculateLoanDetails()
   }, [formData.amount, formData.interest_rate, formData.insurance_rate, formData.loan_duration_years, formData.start_date])
+
+  // --- Nouvelle gestion co-emprunteurs : liste à cocher ---
+  const [allCoBorrowers, setAllCoBorrowers] = useState<any[]>([]);
+  const [coBorrowers, setCoBorrowers] = useState<any[]>([]);
+  const [newCoBorrower, setNewCoBorrower] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    share: 50,
+  });
+  const [isLoadingCoBorrowers, setIsLoadingCoBorrowers] = useState(false);
+  const [editingShareId, setEditingShareId] = useState<string | null>(null);
+  const [editingShareValue, setEditingShareValue] = useState<number>(50);
+
+  // Charger tous les co-emprunteurs à l'ouverture
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      const { data } = await supabase.from('co_borrowers').select('*');
+      setAllCoBorrowers(data || []);
+    })();
+  }, [isOpen]);
+
+  // Charger les co-emprunteurs associés au prêt
+  useEffect(() => {
+    if (!loanId) return;
+    setIsLoadingCoBorrowers(true);
+    supabase
+      .from('loan_co_borrowers')
+      .select('id, share, co_borrower_id, loan_id, co_borrowers(*)')
+      .eq('loan_id', loanId)
+      .then(({ data }) => setCoBorrowers(data || []))
+      .finally(() => setIsLoadingCoBorrowers(false));
+  }, [loanId, isOpen]);
+
+  // Mapping sécurisé pour éviter undefined
+  const associatedCoBorrowerIds = coBorrowers
+    .map(cb => cb && cb.co_borrower_id ? String(cb.co_borrower_id) : null)
+    .filter(Boolean);
+
+  // Associer/dissocier un co-emprunteur
+  const handleToggleCoBorrower = async (coBorrowerId: string, checked: boolean) => {
+    setIsLoadingCoBorrowers(true);
+    if (checked) {
+      // Vérifie s'il existe déjà côté front
+      if (coBorrowers.some(cb => cb.co_borrower_id === coBorrowerId)) {
+        toast({
+          title: "Déjà associé",
+          description: "Ce co-emprunteur est déjà lié à ce prêt.",
+          variant: "default",
+        });
+        setIsLoadingCoBorrowers(false);
+        return;
+      }
+      // Vérifie s'il existe déjà côté back (sécurité)
+      const { data: existing } = await supabase
+        .from('loan_co_borrowers')
+        .select('*')
+        .eq('loan_id', loanId)
+        .eq('co_borrower_id', coBorrowerId);
+      if (existing && existing.length > 0) {
+        toast({
+          title: "Déjà associé (base)",
+          description: "Ce co-emprunteur est déjà lié à ce prêt (base).",
+          variant: "default",
+        });
+        setIsLoadingCoBorrowers(false);
+        return;
+      }
+      // DEBUG
+      console.log('INSERT loan_co_borrowers', { loan_id: loanId, co_borrower_id: coBorrowerId, share: 0 });
+      const { data: insertData, error: insertError } = await supabase
+        .from('loan_co_borrowers')
+        .insert([{ loan_id: loanId, co_borrower_id: coBorrowerId, share: 0 }]);
+      if (insertError) {
+        console.error('Erreur insert loan_co_borrowers', insertError);
+      } else {
+        console.log('SUCCESS insert loan_co_borrowers', insertData);
+      }
+    } else {
+      const { error: deleteError } = await supabase.from('loan_co_borrowers')
+        .delete()
+        .eq('loan_id', loanId)
+        .eq('co_borrower_id', coBorrowerId);
+      if (deleteError) {
+        console.error('Erreur delete loan_co_borrowers', deleteError);
+      } else {
+        console.log('SUCCESS delete loan_co_borrowers', { loan_id: loanId, co_borrower_id: coBorrowerId });
+      }
+    }
+    // Refresh associations
+    const { data } = await supabase
+      .from('loan_co_borrowers')
+      .select('id, share, co_borrower_id, loan_id, co_borrowers(*)')
+      .eq('loan_id', loanId);
+    setCoBorrowers(data || []);
+    // Mettre à jour la part du principal
+    if (data) await updatePrincipalShare(loanId, data);
+    setIsLoadingCoBorrowers(false);
+    // Rafraîchir la liste principale des prêts si onSuccess est fourni
+    if (onSuccess) onSuccess();
+  };
+
+  // Modification part (%) inline
+  const handleUpdateShare = async (loanId: string, coBorrowerId: string) => {
+    setIsLoadingCoBorrowers(true);
+    await supabase.from('loan_co_borrowers').update({ share: editingShareValue }).eq('loan_id', loanId).eq('co_borrower_id', coBorrowerId);
+    const { data } = await supabase.from('loan_co_borrowers').select('id, share, co_borrower_id, loan_id, co_borrowers(*)').eq('loan_id', loanId);
+    setCoBorrowers(data || []);
+    // Mettre à jour la part du principal
+    if (data) await updatePrincipalShare(loanId, data);
+    setEditingShareId(null);
+    setIsLoadingCoBorrowers(false);
+  };
+
+  const handleAddCoBorrower = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoadingCoBorrowers(true);
+    // N’envoie que les champs existants dans la table co_borrowers !
+    const { data: created, error: err1 } = await supabase
+      .from('co_borrowers')
+      .insert([
+        {
+          first_name: newCoBorrower.first_name,
+          last_name: newCoBorrower.last_name,
+          email: newCoBorrower.email,
+        }
+      ])
+      .select()
+      .single();
+
+    if (err1) {
+      // Gérer l’erreur ici (afficher un message ou log)
+      setIsLoadingCoBorrowers(false);
+      return;
+    }
+
+    // Rafraîchir la liste globale
+    const { data } = await supabase.from('co_borrowers').select('*');
+    setAllCoBorrowers(data || []);
+    setNewCoBorrower({ first_name: '', last_name: '', email: '' });
+    setIsLoadingCoBorrowers(false);
+  };
+
+  const handleRemoveCoBorrower = async (coBorrowerId: string) => {
+    setIsLoadingCoBorrowers(true);
+    await supabase
+      .from('loan_co_borrowers')
+      .delete()
+      .eq('loan_id', loanId)
+      .eq('co_borrower_id', coBorrowerId);
+    // Refresh
+    const { data } = await supabase
+      .from('loan_co_borrowers')
+      .select('co_borrowers(*)')
+      .eq('loan_id', loanId);
+    setCoBorrowers(data || []);
+    setIsLoadingCoBorrowers(false);
+  };
+
+  const handleEditShare = (id: string, currentShare: number) => {
+    setEditingShareId(id);
+    setEditingShareValue(currentShare);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -352,255 +519,650 @@ export function LoanModal({ isOpen, onClose, propertyId, loanId, onSuccess }: Lo
     }
   }
 
+  // --- Fonctions pour modifier/supprimer un co-emprunteur globalement ---
+  const handleDeleteCoBorrower = async (coBorrowerId: string) => {
+    setIsLoadingCoBorrowers(true);
+    // Supprime le co-emprunteur dans la table co_borrowers (et donc toutes ses associations)
+    await supabase.from('co_borrowers').delete().eq('id', coBorrowerId);
+    // Refresh la liste globale et les associations
+    const { data: all } = await supabase.from('co_borrowers').select('*');
+    setAllCoBorrowers(all || []);
+    const { data: assoc } = await supabase.from('loan_co_borrowers').select('id, share, co_borrower_id, loan_id, co_borrowers(*)').eq('loan_id', loanId);
+    setCoBorrowers(assoc || []);
+    setIsLoadingCoBorrowers(false);
+  };
+
+  // State pour la modale d’édition
+  const [editingCoBorrower, setEditingCoBorrower] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '' });
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Ouvre la modale avec les infos préremplies
+  const openEditModal = (coBorrower: any) => {
+    setEditingCoBorrower(coBorrower);
+    setEditForm({
+      first_name: coBorrower.first_name,
+      last_name: coBorrower.last_name,
+      email: coBorrower.email,
+    });
+    setIsEditing(true);
+  };
+
+  // Soumission du formulaire
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCoBorrower) return;
+    await supabase
+      .from('co_borrowers')
+      .update({
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        email: editForm.email,
+      })
+      .eq('id', editingCoBorrower.id);
+    // Rafraîchir la liste globale
+    const { data } = await supabase.from('co_borrowers').select('*');
+    setAllCoBorrowers(data || []);
+    setIsEditing(false);
+    setEditingCoBorrower(null);
+  };
+
+  const handleEditCoBorrower = (coBorrower: any) => {
+    openEditModal(coBorrower);
+  };
+
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  // Association automatique de l’utilisateur connecté au prêt si absent
+  useEffect(() => {
+    if (!user || !loanId) return;
+
+    // 1. Vérifier si le user existe dans co_borrowers
+    supabase
+      .from('co_borrowers')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(async ({ data: coBorrower }) => {
+        if (!coBorrower) {
+          // 2. Créer le co-borrower minimal si absent
+          await supabase.from('co_borrowers').insert([{
+            id: user.id,
+            first_name: user.user_metadata?.first_name || '',
+            last_name: user.user_metadata?.last_name || '',
+            email: user.email || ''
+          }]);
+        }
+
+        // 3. Vérifier l’association dans loan_co_borrowers
+        supabase
+          .from('loan_co_borrowers')
+          .select('id')
+          .eq('loan_id', loanId)
+          .eq('co_borrower_id', user.id)
+          .maybeSingle()
+          .then(({ data: existing }) => {
+            if (!existing) {
+              supabase.from('loan_co_borrowers').insert([
+                { loan_id: loanId, co_borrower_id: user.id, share: 50 }
+              ]).then(() => {
+                supabase
+                  .from('loan_co_borrowers')
+                  .select('id, share, co_borrower_id, loan_id, co_borrowers(*)')
+                  .eq('loan_id', loanId)
+                  .then(({ data }) => setCoBorrowers(data || []));
+              });
+            }
+          });
+      });
+  }, [user, loanId]);
+
+  // Fonction utilitaire pour mettre à jour la part du principal
+  const updatePrincipalShare = async (loanId: string, coBorrowers: any[]) => {
+    // Récupérer l'utilisateur connecté
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const principalId = session.user.id;
+
+    // Calculer la somme des parts des co-emprunteurs (hors principal)
+    const totalCoBorrowersShare = coBorrowers
+      .filter(cb => cb.co_borrower_id !== principalId)
+      .reduce((sum, cb) => sum + (cb.share || 0), 0);
+    // La part du principal est le reste
+    const principalShare = 100 - totalCoBorrowersShare;
+
+    // Vérifier si le principal a déjà une entrée
+    const { data: existing } = await supabase
+      .from('loan_co_borrowers')
+      .select('*')
+      .eq('loan_id', loanId)
+      .eq('co_borrower_id', principalId);
+
+    if (existing && existing.length > 0) {
+      // Mise à jour
+      await supabase
+        .from('loan_co_borrowers')
+        .update({ share: principalShare })
+        .eq('loan_id', loanId)
+        .eq('co_borrower_id', principalId);
+    } else {
+      // Création
+      await supabase
+        .from('loan_co_borrowers')
+        .insert([{ loan_id: loanId, co_borrower_id: principalId, share: principalShare }]);
+    }
+  };
+
+  const filteredCoBorrowers = allCoBorrowers.filter(cb => cb && (cb.id || cb.email || cb.first_name || cb.last_name));
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
-          <DialogTitle>{loanId ? 'Modifier le prêt' : 'Ajouter un prêt'}</DialogTitle>
-          <DialogDescription>
-            {loanId 
-              ? 'Modifiez les informations du prêt ci-dessous.' 
-              : 'Remplissez le formulaire pour ajouter un nouveau prêt.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nom du prêt</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              required
-              placeholder="ex: Prêt principal"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="loan_type">Type de prêt</Label>
-            <Select
-              value={formData.loan_type}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, loan_type: value }))}
-              required
+    <AnimatePresence>
+      {isOpen && (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+          <DialogContent className="w-full max-w-[95vw] overflow-x-hidden sm:max-w-[560px] rounded-2xl shadow-2xl bg-gradient-to-br from-white via-blue-50 to-blue-100 border-0">
+            <DialogTitle>Modifier le prêt</DialogTitle>
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
             >
-              <SelectTrigger id="loan_type">
-                <SelectValue placeholder="Sélectionner un type de prêt" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Prêt immobilier">Prêt immobilier</SelectItem>
-                <SelectItem value="Prêt travaux">Prêt travaux</SelectItem>
-                <SelectItem value="Prêt personnel">Prêt personnel</SelectItem>
-                <SelectItem value="Autre">Autre</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <DialogHeader className="mb-2">
+                <div className="flex items-center gap-3 mb-1">
+                  <CreditCard className="w-7 h-7 text-blue-500 bg-blue-100 rounded-full p-1 shadow-md" />
+                  <DialogTitle className="text-xl font-bold text-blue-800">
+                    {loanId ? 'Modifier le prêt' : 'Ajouter un prêt'}
+                  </DialogTitle>
+                </div>
+                <DialogDescription className="text-sm text-blue-700/80">
+                  {loanId 
+                    ? 'Modifiez les informations du prêt ci-dessous.' 
+                    : 'Remplissez le formulaire pour ajouter un nouveau prêt.'}
+                </DialogDescription>
+              </DialogHeader>
+              <Tabs defaultValue="infos" className="w-full mt-2">
+                <TabsList className="w-full mb-4 bg-blue-100/70">
+                  <TabsTrigger value="infos" className="w-1/2 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-900">
+                    <CreditCard className="w-4 h-4 mr-1" /> Informations
+                  </TabsTrigger>
+                  <TabsTrigger value="co-borrowers" className="w-1/2 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-900">
+                    <Users className="w-4 h-4 mr-1" /> Co-emprunteurs
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="infos" asChild>
+                  <motion.form
+                    onSubmit={handleSubmit}
+                    className="space-y-4"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -40 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nom du prêt</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        required
+                        placeholder="ex: Prêt principal"
+                        className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                      />
+                    </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="repayment_type">Type de remboursement</Label>
-            <Select
-              value={formData.repayment_type}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, repayment_type: value }))}
-              required
-            >
-              <SelectTrigger id="repayment_type">
-                <SelectValue placeholder="Sélectionner un type de remboursement" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="amortissable">Prêt classique (remboursement progressif)</SelectItem>
-                <SelectItem value="in fine">Prêt in fine</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {formData.repayment_type === 'amortissable' && (
-            <div className="space-y-2 mt-2">
-              <Label htmlFor="amortization_profile">Profil d'amortissement</Label>
-              <Select
-                value={formData.amortization_profile}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, amortization_profile: value }))}
-                required
-              >
-                <SelectTrigger id="amortization_profile">
-                  <SelectValue placeholder="Sélectionner un profil d'amortissement" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="classique">Mensualités constantes (annuité classique)</SelectItem>
-                  <SelectItem value="constant">Amortissement constant (mensualités dégressives)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+                    <div className="space-y-2">
+                      <Label htmlFor="loan_type">Type de prêt</Label>
+                      <Select
+                        value={formData.loan_type}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, loan_type: value }))}
+                        required
+                      >
+                        <SelectTrigger id="loan_type">
+                          <SelectValue placeholder="Sélectionner un type de prêt" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Prêt immobilier">Prêt immobilier</SelectItem>
+                          <SelectItem value="Prêt travaux">Prêt travaux</SelectItem>
+                          <SelectItem value="Prêt personnel">Prêt personnel</SelectItem>
+                          <SelectItem value="Autre">Autre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Montant emprunté (€)</Label>
-              <Input
-                id="amount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                required
-                placeholder="ex: 200000"
-              />
-            </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="repayment_type">Type de remboursement</Label>
+                      <Select
+                        value={formData.repayment_type}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, repayment_type: value }))}
+                        required
+                      >
+                        <SelectTrigger id="repayment_type">
+                          <SelectValue placeholder="Sélectionner un type de remboursement" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="amortissable">Prêt classique (remboursement progressif)</SelectItem>
+                          <SelectItem value="in fine">Prêt in fine</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {formData.repayment_type === 'amortissable' && (
+                      <div className="space-y-2 mt-2">
+                        <Label htmlFor="amortization_profile">Profil d'amortissement</Label>
+                        <Select
+                          value={formData.amortization_profile}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, amortization_profile: value }))}
+                          required
+                        >
+                          <SelectTrigger id="amortization_profile">
+                            <SelectValue placeholder="Sélectionner un profil d'amortissement" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="classique">Mensualités constantes (annuité classique)</SelectItem>
+                            <SelectItem value="constant">Amortissement constant (mensualités dégressives)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-            <div className="space-y-2">
-              <Label htmlFor="loan_duration_years">Durée (années)</Label>
-              <Input
-                id="loan_duration_years"
-                type="number"
-                min="1"
-                max="40"
-                value={formData.loan_duration_years}
-                onChange={(e) => setFormData(prev => ({ ...prev, loan_duration_years: e.target.value }))}
-                required
-                placeholder="ex: 20"
-              />
-            </div>
-          </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="amount">Montant emprunté (€)</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.amount}
+                          onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                          required
+                          placeholder="ex: 200000"
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="interest_rate">Taux d'intérêt (%)</Label>
-              <Input
-                id="interest_rate"
-                type="number"
-                min="0"
-                max="100"
-                step="0.001"
-                value={formData.interest_rate}
-                onChange={(e) => setFormData(prev => ({ ...prev, interest_rate: e.target.value }))}
-                required
-                placeholder="ex: 2.5"
-              />
-            </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="loan_duration_years">Durée (années)</Label>
+                        <Input
+                          id="loan_duration_years"
+                          type="number"
+                          min="1"
+                          max="40"
+                          value={formData.loan_duration_years}
+                          onChange={(e) => setFormData(prev => ({ ...prev, loan_duration_years: e.target.value }))}
+                          required
+                          placeholder="ex: 20"
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="insurance_rate">Taux d'assurance (%)</Label>
-              <Input
-                id="insurance_rate"
-                type="number"
-                min="0"
-                max="100"
-                step="0.001"
-                value={formData.insurance_rate}
-                onChange={(e) => setFormData(prev => ({ ...prev, insurance_rate: e.target.value }))}
-                placeholder="ex: 0.36"
-              />
-            </div>
-          </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="interest_rate">Taux d'intérêt (%)</Label>
+                        <Input
+                          id="interest_rate"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.001"
+                          value={formData.interest_rate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, interest_rate: e.target.value }))}
+                          required
+                          placeholder="ex: 2.5"
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="start_date">Date de début</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                required
-              />
-            </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="insurance_rate">Taux d'assurance (%)</Label>
+                        <Input
+                          id="insurance_rate"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.001"
+                          value={formData.insurance_rate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, insurance_rate: e.target.value }))}
+                          placeholder="ex: 0.36"
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="payment_day">Jour de paiement mensuel</Label>
-              <Input
-                id="payment_day"
-                type="number"
-                min="1"
-                max="31"
-                value={formData.payment_day}
-                onChange={(e) => setFormData(prev => ({ ...prev, payment_day: e.target.value }))}
-                placeholder="ex: 15"
-              />
-            </div>
-          </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="start_date">Date de début</Label>
+                        <Input
+                          id="start_date"
+                          type="date"
+                          value={formData.start_date}
+                          onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                          required
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="monthly_payment" className="flex items-center">
-                Mensualité calculée (€)
-                <span className="ml-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">
-                  Auto
-                </span>
-              </Label>
-              <Input
-                id="monthly_payment"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.monthly_payment}
-                onChange={(e) => setFormData(prev => ({ ...prev, monthly_payment: e.target.value }))}
-                placeholder="Calculé automatiquement"
-                className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium"
-                readOnly
-              />
-            </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_day">Jour de paiement mensuel</Label>
+                        <Input
+                          id="payment_day"
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={formData.payment_day}
+                          onChange={(e) => setFormData(prev => ({ ...prev, payment_day: e.target.value }))}
+                          placeholder="ex: 15"
+                          className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                        />
+                      </div>
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="end_date" className="flex items-center">
-                Date de fin calculée
-                <span className="ml-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">
-                  Auto
-                </span>
-              </Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium"
-                readOnly
-              />
-            </div>
-          </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="monthly_payment" className="flex items-center">
+                          Mensualité calculée (€)
+                          <span className="ml-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
+                            Auto
+                          </span>
+                        </Label>
+                        <Input
+                          id="monthly_payment"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.monthly_payment}
+                          onChange={(e) => setFormData(prev => ({ ...prev, monthly_payment: e.target.value }))}
+                          placeholder="Calculé automatiquement"
+                          className="bg-blue-50 border-blue-200 text-blue-900 font-medium rounded-lg focus:ring-2 focus:ring-blue-300"
+                          readOnly
+                        />
+                      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="remaining_capital" className="flex items-center">
-              Capital restant dû (€)
-              <span className="ml-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">
-                Auto
-              </span>
-            </Label>
-            <Input
-              id="remaining_capital"
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.remaining_capital}
-              onChange={(e) => setFormData(prev => ({ ...prev, remaining_capital: e.target.value }))}
-              placeholder="Calculé automatiquement"
-              className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium"
-              readOnly
-            />
-          </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="end_date" className="flex items-center">
+                          Date de fin calculée
+                          <span className="ml-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
+                            Auto
+                          </span>
+                        </Label>
+                        <Input
+                          id="end_date"
+                          type="date"
+                          value={formData.end_date}
+                          onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                          className="bg-blue-50 border-blue-200 text-blue-900 font-medium rounded-lg focus:ring-2 focus:ring-blue-300"
+                          readOnly
+                        />
+                      </div>
+                    </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Informations complémentaires sur le prêt..."
-              className="min-h-[80px]"
-            />
-          </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="remaining_capital" className="flex items-center">
+                        Capital restant dû (€)
+                        <span className="ml-2 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
+                          Auto
+                        </span>
+                      </Label>
+                      <Input
+                        id="remaining_capital"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.remaining_capital}
+                        onChange={(e) => setFormData(prev => ({ ...prev, remaining_capital: e.target.value }))}
+                        placeholder="Calculé automatiquement"
+                        className="bg-blue-50 border-blue-200 text-blue-900 font-medium rounded-lg focus:ring-2 focus:ring-blue-300"
+                        readOnly
+                      />
+                    </div>
 
-          <div className="flex justify-end space-x-2">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button variant="outline" type="button" onClick={onClose}>
-                Annuler
-              </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea
+                        id="notes"
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Informations complémentaires sur le prêt..."
+                        className="min-h-[80px] rounded-lg focus:ring-2 focus:ring-blue-300"
+                      />
+                    </div>
+
+                    <div className="flex justify-end space-x-2 mt-2">
+                      <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
+                        <Button variant="outline" type="button" onClick={onClose} className="rounded-lg border-blue-200">
+                          Annuler
+                        </Button>
+                      </motion.div>
+                      <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
+                        <Button type="submit" disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md">
+                          {isLoading ? 'Enregistrement...' : loanId ? 'Modifier' : 'Ajouter'}
+                        </Button>
+                      </motion.div>
+                    </div>
+                  </motion.form>
+                </TabsContent>
+                <TabsContent value="co-borrowers" asChild>
+                  <motion.div
+                    initial={{ opacity: 0, x: -40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 40 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="space-y-5">
+                      <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-blue-800">
+                        <Users className="w-5 h-5" /> Associer des co-emprunteurs
+                      </h3>
+                      <div className="max-h-60 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg p-3 border border-blue-100">
+                        {/* Affichage de l'utilisateur connecté (toujours coché, part grisée, pas de modif) */}
+                        {user && (
+                          <li key={`me-${user?.id || 'current'}`} className="flex flex-wrap items-center justify-between bg-white rounded px-2 py-1 border border-blue-100 mb-1">
+                            <label className="flex items-center gap-2 font-bold text-blue-700">
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                disabled
+                              />
+                              <span className="font-semibold text-gray-800">Moi ({user.email})</span>
+                            </label>
+                            {/* Calcul du pourcentage du user connecté */}
+                            <span className="ml-2 px-2 py-0.5 rounded bg-gray-100 text-gray-400 border border-gray-200 text-xs">
+                              {(() => {
+                                if (!coBorrowers || coBorrowers.length === 0) return '100%';
+                                const othersShare = coBorrowers.filter(cb => cb.co_borrowers?.id !== user.id).reduce((sum, cb) => sum + (cb.share || 0), 0);
+                                return `${Math.max(0, 100 - othersShare)}%`;
+                              })()}
+                            </span>
+                            {/* Bouton Modifier part grisé et désactivé */}
+                            <button className="ml-2 text-gray-400 cursor-not-allowed text-xs font-normal" disabled>Modifier</button>
+                            {/* Bouton Modifier infos grisé et désactivé */}
+                            <button className="ml-1 text-gray-300 cursor-not-allowed text-xs font-normal" disabled>Modifier infos</button>
+                          </li>
+                        )}
+                        {/* Autres co-emprunteurs (hors user connecté) */}
+                        <ul className="space-y-3">
+                          <AnimatePresence>
+                            {filteredCoBorrowers.filter(cb => cb.id !== user?.id).map((cb, index) => {
+                              const key = cb?.id ? `cbid-${cb.id}-${index}`
+                                : cb?.email ? `cbmail-${cb.email}-${index}`
+                                : cb?.first_name || cb?.last_name ? `cbname-${cb.first_name || ''}-${cb.last_name || ''}-${index}`
+                                : `cbidx-${index}`;
+                              return (
+                                <motion.li
+                                  key={key}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  className="flex flex-wrap items-center justify-between bg-white rounded px-2 py-1 border border-blue-100"
+                                >
+                                  <label className="flex items-center gap-2 cursor-pointer w-full">
+                                    <input
+                                      type="checkbox"
+                                      checked={associatedCoBorrowerIds.includes(String(cb.id))}
+                                      onChange={e => handleToggleCoBorrower(cb.id, e.target.checked)}
+                                      disabled={isLoadingCoBorrowers}
+                                      className="accent-blue-600"
+                                    />
+                                    <span className="font-medium text-blue-900">
+                                      {cb.first_name} {cb.last_name} <span className="text-gray-500">({cb.email || "—"})</span>
+                                    </span>
+                                  </label>
+                                  {associatedCoBorrowerIds.includes(String(cb.id)) && (
+                                    <div className="flex items-center gap-2 ml-2">
+                                      {editingShareId === cb.id ? (
+                                        <>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            value={editingShareValue}
+                                            onChange={e => setEditingShareValue(Number(e.target.value))}
+                                            className="w-16 rounded border-blue-200 focus:ring-2 focus:ring-blue-400 text-center text-sm"
+                                          />
+                                          <button
+                                            className="text-blue-700 font-semibold hover:underline text-sm"
+                                            onClick={() => handleUpdateShare(loanId, cb.id)}
+                                            type="button"
+                                            disabled={isLoadingCoBorrowers}
+                                          >
+                                            Valider
+                                          </button>
+                                          <button
+                                            className="text-gray-500 hover:underline text-sm"
+                                            onClick={() => setEditingShareId(null)}
+                                            type="button"
+                                            disabled={isLoadingCoBorrowers}
+                                          >
+                                            Annuler
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-xs text-blue-700 font-semibold bg-blue-50 rounded px-2 py-0.5 border border-blue-200">
+                                            {coBorrowers.find(a => String(a.co_borrower_id) === String(cb.id))?.share ?? 0}%
+                                          </span>
+                                          <button
+                                            className="text-blue-700 hover:underline text-xs font-normal ml-1"
+                                            onClick={() => handleEditShare(cb.id, coBorrowers.find(a => String(a.co_borrower_id) === String(cb.id))?.share ?? 0)}
+                                            type="button"
+                                            disabled={isLoadingCoBorrowers}
+                                          >
+                                            Modifier
+                                          </button>
+                                          <button
+                                            className="text-blue-700 hover:underline text-xs font-normal ml-1"
+                                            onClick={() => handleEditCoBorrower(cb)}
+                                            type="button"
+                                            disabled={isLoadingCoBorrowers}
+                                          >
+                                            Modifier infos
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </motion.li>
+                              );
+                            })}
+                          </AnimatePresence>
+                        </ul>
+                      </div>
+                      {/* Ajout rapide d'un nouveau co-emprunteur (optionnel) */}
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-blue-800 mb-1">Ajouter un nouveau co-emprunteur</h4>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Prénom"
+                            value={newCoBorrower.first_name}
+                            onChange={e => setNewCoBorrower(prev => ({ ...prev, first_name: e.target.value }))}
+                            required
+                            className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                          />
+                          <Input
+                            placeholder="Nom"
+                            value={newCoBorrower.last_name}
+                            onChange={e => setNewCoBorrower(prev => ({ ...prev, last_name: e.target.value }))}
+                            required
+                            className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                          />
+                          <Input
+                            placeholder="Email"
+                            value={newCoBorrower.email}
+                            onChange={e => setNewCoBorrower(prev => ({ ...prev, email: e.target.value }))}
+                            type="email"
+                            className="rounded-lg focus:ring-2 focus:ring-blue-300"
+                          />
+                          <Button
+                            type="button"
+                            disabled={isLoadingCoBorrowers}
+                            onClick={handleAddCoBorrower}
+                            className="bg-blue-500 hover:bg-blue-700 text-white rounded-lg shadow"
+                          >
+                            Ajouter
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </TabsContent>
+              </Tabs>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button type="submit" disabled={isLoading} className="bg-indigo-600 hover:bg-indigo-700">
-                {isLoading ? 'Enregistrement...' : loanId ? 'Modifier' : 'Ajouter'}
-              </Button>
-            </motion.div>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
+      {isEditing && (
+        <Dialog key={editingCoBorrower?.id || 'edit-co-borrower'} open={isEditing} onOpenChange={() => setIsEditing(false)}>
+          <DialogContent key={editingCoBorrower?.id || 'edit-co-borrower'} className="w-full max-w-[400px] p-6 rounded-xl shadow-lg bg-white border border-gray-200">
+            <DialogTitle className="text-lg font-semibold text-gray-800 mb-2 text-center">Modifier le co-emprunteur</DialogTitle>
+            <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-600 font-medium" htmlFor="edit-first-name">Prénom</label>
+                <input
+                  id="edit-first-name"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-900 bg-gray-50"
+                  placeholder="Prénom"
+                  value={editForm.first_name}
+                  onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-600 font-medium" htmlFor="edit-last-name">Nom</label>
+                <input
+                  id="edit-last-name"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-900 bg-gray-50"
+                  placeholder="Nom"
+                  value={editForm.last_name}
+                  onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-gray-600 font-medium" htmlFor="edit-email">Email</label>
+                <input
+                  id="edit-email"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-900 bg-gray-50"
+                  placeholder="Email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end mt-2">
+                <button type="button" className="px-4 py-2 rounded-lg border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 transition" onClick={() => setIsEditing(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+    </AnimatePresence>
   )
 }

@@ -277,6 +277,12 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
       const apiUrl = `/api/dvf?citycode=${citycode}`;
       console.log('API interne DVF URL:', apiUrl);
       const dvfRes = await fetch(apiUrl);
+      if (!dvfRes.ok) {
+        setDvfNote('Erreur lors de la récupération des ventes DVF (code INSEE ou commune invalide, ou service indisponible).');
+        setDvfPrecision('');
+        setDvfPrixM2(null);
+        return [];
+      }
       const dvfData = await dvfRes.json();
       console.log('DVF Response:', dvfData);
       if (!dvfData.data?.length) return [];

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { ReactNode } from 'react'
+import React, { ReactNode, useEffect } from 'react'
 import { motion, AnimatePresence, HTMLMotionProps } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -9,11 +9,25 @@ export const AnimatedCard = ({
   children, 
   className,
   delay = 0,
+  boxShadow,
   ...props 
 }: Omit<HTMLMotionProps<"div">, "initial" | "animate" | "exit" | "transition" | "whileHover"> & { 
   delay?: number,
+  boxShadow?: string,
   children: ReactNode 
 }) => {
+  // Forcer le style boxShadow à 'none' par défaut, avant toute animation
+  let safeBoxShadow = 'none';
+  if (typeof boxShadow === 'string') {
+    if (boxShadow.includes('NaN') || /NaN/.test(boxShadow)) {
+      safeBoxShadow = 'none';
+    } else {
+      safeBoxShadow = boxShadow;
+    }
+  }
+
+  // Suppression des logs de debug
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -28,8 +42,9 @@ export const AnimatedCard = ({
       }}
       whileHover={{ 
         scale: 1.02,
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        boxShadow: safeBoxShadow
       }}
+      style={{ boxShadow: safeBoxShadow }}
       className={cn("rounded-lg border bg-card text-card-foreground shadow-sm py-4", className)}
       {...props}
     >

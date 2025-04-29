@@ -1,10 +1,13 @@
 'use client'
 
 import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from '@/lib/context/auth-context'
 import { Navbar } from '@/components/navigation/navbar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { useState, useEffect } from 'react'
+import { SessionContextProvider } from '@supabase/auth-helpers-react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+const supabase = createClientComponentClient();
 
 export default function ClientLayout({
   children,
@@ -53,7 +56,7 @@ export default function ClientLayout({
   }, [isMobile])
 
   return (
-    <AuthProvider>
+    <SessionContextProvider supabaseClient={supabase}>
       <div className="flex flex-col md:flex-row h-screen">
         <Sidebar />
         <div className="flex-1 flex flex-col w-full">
@@ -65,6 +68,6 @@ export default function ClientLayout({
         </div>
       </div>
       <Toaster />
-    </AuthProvider>
+    </SessionContextProvider>
   )
 }

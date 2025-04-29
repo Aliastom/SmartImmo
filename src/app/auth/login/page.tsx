@@ -1,6 +1,7 @@
 'use client'
 
-import { useAuth } from '@/lib/context/auth-context'
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useSession } from '@supabase/auth-helpers-react';
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,8 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 
 export default function LoginPage() {
-  const { signIn } = useAuth()
+  const supabase = useSupabaseClient();
+  const session = useSession();
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,19 +23,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
 
     try {
-      await signIn(email, password)
-      router.push('/dashboard')
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue')
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-100 via-white to-pink-100">

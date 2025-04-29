@@ -1,5 +1,6 @@
 'use client'
 
+import { useSession } from '@supabase/auth-helpers-react';
 import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -26,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 
+
 type Loan = Database['public']['Tables']['loans']['Row']
 
 interface PropertyLoansProps {
@@ -42,6 +44,14 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
   const [selectedLoanId, setSelectedLoanId] = useState<string | undefined>(undefined)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [loanToDelete, setLoanToDelete] = useState<string | null>(null)
+  const [loanShares, setLoanShares] = useState<Record<string, { share: number, count: number, coBorrowers: any[] }>>({});
+  const session = useSession();
+
+  useEffect(() => {
+    if (session?.user && loans.length > 0) {
+      fetchShares(loans);
+    }
+  }, [session?.user, loans]);
 
   const fetchLoans = async () => {
     setIsLoading(true)
@@ -50,12 +60,10 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
       if (!session) return
 
       try {
-        // Tenter de récupérer les emprunts
         const { data, error } = await supabase
           .from('loans')
           .select('*')
           .eq('property_id', propertyId)
-          .eq('user_id', session.user.id)
           .order('start_date', { ascending: false })
 
         if (error) {
@@ -66,7 +74,6 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
 
         setLoans(data || [])
       } catch (e) {
-        // Gérer le cas où la table n'existe pas encore
         console.error('Error fetching loans (table might not exist yet):', e)
         setLoans([])
       }
@@ -87,11 +94,29 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
     fetchLoans()
   }, [propertyId, supabase])
 
-  // Calcule l'apport initial
+  const fetchShares = async (loansList: any[]) => {
+    const shares: Record<string, { share: number, count: number, coBorrowers: any[] }> = {};
+    for (const loan of loansList) {
+      const { data, count, error } = await supabase
+        .from('loan_co_borrowers')
+        .select('co_borrower_id, share', { count: 'exact', head: false })
+        .eq('loan_id', loan.id);
+      if (error) {
+        console.error('Erreur fetch loan_co_borrowers', error);
+      }
+      const userIds = Array.isArray(data) ? data.map(cb => cb.co_borrower_id) : [];
+      if (loan.user_id && !userIds.includes(loan.user_id)) {
+        userIds.push(loan.user_id);
+      }
+      console.log(`[RESULTAT NB EMPRUNTEURS pour ${loan.id}]`, userIds.length, userIds);
+      shares[loan.id] = { share: 0, count: userIds.length, coBorrowers: data };
+    }
+    setLoanShares(shares);
+  };
+
   const totalLoanAmount = loans.reduce((sum, loan) => sum + (Number(loan.amount) || 0), 0)
   const apport = purchasePrice !== undefined ? Math.max(0, purchasePrice - totalLoanAmount) : null
 
-  // Détermination de la période à afficher
   const minYear = loans.length > 0 ? Math.min(...loans.map(l => l.start_date ? new Date(l.start_date).getFullYear() : 2100)) : new Date().getFullYear();
   const maxYear = loans.length > 0 ? Math.max(...loans.map(l => l.end_date ? new Date(l.end_date).getFullYear() : 1900)) : new Date().getFullYear();
   const interestTableData = computeYearlyInterests(loans, minYear, maxYear);
@@ -187,6 +212,20 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
     }
   }
 
+  function getUserShare(
+    loan: any,
+    coBorrowers: { co_borrower_id: string; share: number }[],
+    userId: string
+  ): number {
+    console.log('[DEBUG getUserShare] userId:', userId, 'coBorrowers:', coBorrowers);
+    const coBorrower = coBorrowers.find(cb => cb.co_borrower_id === userId);
+    if (coBorrower && typeof coBorrower.share === 'number') {
+      return coBorrower.share / 100;
+    }
+    const totalCoBorrowerShare = coBorrowers.reduce((sum, cb) => sum + (cb.share || 0), 0);
+    return Math.max(0, 1 - totalCoBorrowerShare / 100);
+  }
+
   return (
     <>
       <Card>
@@ -231,57 +270,50 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
               animate="visible"
               className="space-y-4"
             >
-              {loans.map((loan) => {
-                // Calcul du coût total du crédit
-                const monthly = Number(loan.monthly_payment) || 0;
+              {loans.map((loan, idx) => {
+                const part = 1;
+                const coBorrowerCount = loanShares[loan.id]?.count || 1;
+                const key = loan?.id ? `loanid-${loan.id}` : `loanidx-${idx}`;
+                const monthly = (Number(loan.monthly_payment) || 0) * part;
                 const months = loan.start_date && loan.end_date
                   ? Math.max(1, Math.round((new Date(loan.end_date).getFullYear() - new Date(loan.start_date).getFullYear()) * 12 + (new Date(loan.end_date).getMonth() - new Date(loan.start_date).getMonth()) + 1))
                   : 0;
                 const totalPaid = monthly * months;
-                const creditCost = totalPaid - (Number(loan.amount) || 0);
+                const creditCost = totalPaid - ((Number(loan.amount) || 0) * part);
+                const coBorrowers = loanShares[loan.id]?.coBorrowers || [];
+                const userId = session?.user?.id;
+                const userShare = userId ? getUserShare(loan, coBorrowers, userId) : 1;
+
+                const montantUser = (Number(loan.amount) || 0) * userShare;
+                const mensualiteUser = (Number(loan.monthly_payment) || 0) * userShare;
+                const capitalRestantUser = (Number(loan.remaining_capital) || 0) * userShare;
+
                 return (
-                  <motion.div key={loan.id} variants={itemVariants}>
+                  <motion.div key={key} variants={itemVariants}>
                     <Card className="shadow-none border border-gray-200">
                       <CardContent className="pt-4 pb-2">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                          <div>
-                            <div className="mt-1 flex items-center gap-1">
-                              <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-700 font-semibold text-xs border border-green-200 shadow-sm">
-                                Montant emprunté&nbsp;:
-                                <span className="ml-1 font-bold text-base">
-                                  {formatCurrency(loan.amount)}
-                                </span>
-                              </span>
-                              <Button variant="outline" size="icon" className="ml-2" title="Modifier l'emprunt" onClick={() => handleEditLoan(loan.id)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 10-4-4l-8 8v3z" />
-                                </svg>
-                              </Button>
-                            </div>
-                            {creditCost > 0 && (
-                              <div className="mt-1 flex items-center gap-1">
-                                <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-700 font-semibold text-xs border border-red-200 shadow-sm">
-                                  Coût total du crédit&nbsp;:
-                                  <span className="ml-1 font-bold text-base">
-                                    {creditCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
-                                  </span>
-                                </span>
-                                <span className="ml-2 text-xs text-gray-400" title="Intérêts payés sur toute la durée du prêt (hors assurance)">(intérêts sur {months} mois)</span>
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">Taux d'intérêt</p>
-                            <p className="font-medium">{loan.interest_rate}%</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">Mensualité</p>
-                            <p className="font-medium">{formatCurrency(loan.monthly_payment)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">Capital restant</p>
-                            <p className="font-medium">{formatCurrency(loan.remaining_capital)}</p>
-                          </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-700 font-semibold text-xs border border-green-200 shadow-sm">
+                            Montant emprunté : <span className="ml-1 font-bold text-base">{formatCurrency(Number(loan.amount) || 0)}</span>
+                          </span>
+                          <span className="inline-block px-2 py-1 rounded bg-blue-50 text-blue-700 font-semibold text-xs border border-blue-200 shadow-sm animate-fade-in">
+                            Votre part : <span className="ml-1 font-bold text-base">{formatCurrency(montantUser)}</span> ({(userShare * 100).toFixed(0)}%)
+                          </span>
+                          <span className="ml-2 mt-1">
+                            <Button variant="outline" size="icon" title="Modifier l'emprunt" onClick={() => handleEditLoan(loan.id)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 10-4-4l-8 8v3z" />
+                              </svg>
+                            </Button>
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 mt-2">
+                          <span className="text-sm text-gray-500">Mensualité globale : <span className="font-medium">{formatCurrency(Number(loan.monthly_payment) || 0)}</span></span>
+                          <span className="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1 mt-1 animate-fade-in">Votre mensualité : <span className="font-semibold">{formatCurrency(mensualiteUser)}</span></span>
+                        </div>
+                        <div className="flex flex-col gap-1 mt-2">
+                          <span className="text-sm text-gray-500">Capital restant dû : <span className="font-medium">{formatCurrency(Number(loan.remaining_capital) || 0)}</span></span>
+                          <span className="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1 mt-1 animate-fade-in">Votre capital restant : <span className="font-semibold">{formatCurrency(capitalRestantUser)}</span></span>
                         </div>
                         <Separator className="my-3" />
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
@@ -305,18 +337,16 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
                           </div>
                         )}
                         {/* Graphique prévisionnel */}
-                        {loan.monthly_payment && loan.amount && loan.interest_rate && (
-                          <LoanChart 
-                            amount={loan.amount}
-                            interestRate={loan.interest_rate}
-                            insuranceRate={loan.insurance_rate}
-                            startDate={loan.start_date}
-                            endDate={loan.end_date}
-                            monthlyPayment={loan.monthly_payment}
-                            remainingCapital={loan.remaining_capital}
-                            paymentDay={loan.payment_day ?? null}
-                          />
-                        )}
+                        <LoanChart
+                          amount={Number(loan.amount) * part || 0}
+                          interestRate={Number(loan.interest_rate) || 0}
+                          insuranceRate={Number(loan.insurance_rate) || 0}
+                          startDate={loan.start_date}
+                          endDate={loan.end_date}
+                          monthlyPayment={Number(loan.monthly_payment) * part || 0}
+                          remainingCapital={Number(loan.remaining_capital) * part || 0}
+                          paymentDay={loan.payment_day ?? null}
+                        />
                       </CardContent>
                     </Card>
                   </motion.div>

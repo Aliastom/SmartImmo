@@ -23,10 +23,7 @@ export default function RootLayout({
     <html lang="fr">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <Script
-          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAAUuft62A6s2bjzXWzvJk4c5IQ9rGsjf0&libraries=places"
-          strategy="beforeInteractive"
-        />
+        {/* Google Maps API supprimée car non utilisée */}
       </head>
       <body className={inter.className}>
         <ClientLayout>

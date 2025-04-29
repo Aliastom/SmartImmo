@@ -107,7 +107,7 @@ export default function PropertyDetailPage() {
         .from('leases')
         .select(`
           *,
-          tenants:tenant_id (
+          tenants (
             id, user_id, first_name, last_name, email, phone, created_at, updated_at
           )
         `)
@@ -115,7 +115,7 @@ export default function PropertyDetailPage() {
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (leaseError && leaseError.code !== 'PGRST116') {
         // PGRST116 est le code d'erreur quand aucun résultat n'est trouvé

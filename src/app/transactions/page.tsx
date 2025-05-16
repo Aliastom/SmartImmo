@@ -8,7 +8,11 @@ import TransactionModal from "./transaction-modal"
 import { TransactionTable } from "./transaction-table"
 import { motion } from 'framer-motion'
 import { PageTransition, AnimatedCard } from '@/components/ui/animated'
+import { PageHeader } from "@/components/ui/page-header"
+import { Plus } from "lucide-react"
 import { useEffect, useState } from "react"
+import './transactions-theme.css';
+import { ArrowDownCircle, TrendingUp, TrendingDown, Sigma, PieChart, Wallet, Search, Filter, Eraser } from 'lucide-react';
 
 export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -27,6 +31,22 @@ export default function TransactionsPage() {
   const [totalExpense, setTotalExpense] = useState(0);
   const [balance, setBalance] = useState(0);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+
+  const hasActiveFilters = (
+    searchQuery.trim() !== '' ||
+    filterCategory !== 'all' ||
+    filterType !== 'all' ||
+    filterProperty !== 'all' ||
+    filterMonth !== 'all'
+  );
+
+  function resetFilters() {
+    setSearchQuery('');
+    setFilterCategory('all');
+    setFilterType('all');
+    setFilterProperty('all');
+    setFilterMonth('all');
+  }
 
   useEffect(() => {
     async function fetchFilters() {
@@ -109,176 +129,192 @@ export default function TransactionsPage() {
   };
 
   return (
-    <PageTransition className="container py-10">
-      <div className="space-y-8">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <motion.h1 
-            className="text-3xl font-bold text-gray-800"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            Gestion des Transactions
-          </motion.h1>
-          <motion.div 
-            className="flex items-center space-x-4"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-          >
-            <div className="relative">
-              <Input 
-                type="text" 
-                placeholder="Rechercher..." 
-                className="pl-10 w-64"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </motion.div>
+    <div className="transactions-bg min-h-screen flex flex-col gap-10 px-8 md:px-16">
+      <PageHeader
+        title="Transactions"
+        buttonText="Ajouter une transaction"
+        buttonIcon={<Plus size={18} />}
+        onButtonClick={() => setIsModalOpen(true)}
+        className="mb-2 mt-2"
+      />
+      {/* Barre de recherche et filtres glassmorphism */}
+      <div className="filter-bar-glass flex-wrap gap-3 md:gap-5 items-center relative">
+        <div className="relative flex items-center" style={{ minWidth: '240px', maxWidth: '340px', flex: '1 1 240px' }}>
+          {/* Icône Search harmonisée avec l’icône Filtrer */}
+          <span className="input-search-icon text-blue-400">
+            <Search size={20} strokeWidth={2} />
+          </span>
+          <input 
+            type="text" 
+            placeholder="Rechercher..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input-glass input-search pr-4 py-2 w-full"
+            style={{ minWidth: '100%', maxWidth: '100%' }}
+          />
         </div>
-
-        {/* Cartes totaux */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <Card className="bg-green-50">
-            <CardContent className="py-4">
-              <div className="text-xs font-semibold text-green-700 mb-1">+ Revenus</div>
-              <div className="text-2xl font-bold text-green-800">{totalIncome.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-red-50">
-            <CardContent className="py-4">
-              <div className="text-xs font-semibold text-red-700 mb-1">- Dépenses</div>
-              <div className="text-2xl font-bold text-red-800">{totalExpense.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-orange-50">
-            <CardContent className="py-4">
-              <div className="text-xs font-semibold text-orange-700 mb-1">∑ Bilan</div>
-              <div className="text-2xl font-bold text-orange-800">{balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Actions + Filtres avancés */}
-        <motion.div 
-          className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.3 }}
-        >
-          <div className="flex flex-col sm:flex-row gap-3">
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button 
-                onClick={() => {
-                  setSelectedTransactionId(undefined)
-                  setIsModalOpen(true)
-                }}
-                className="bg-black hover:bg-black/80 text-white"
-              >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="h-4 w-4 mr-2" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Ajouter une transaction
-              </Button>
-            </motion.div>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <span className="text-sm text-gray-600">Filtrer :</span>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Catégorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes catégories</SelectItem>
-                {categories.map(cat => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-full sm:w-[150px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous types</SelectItem>
-                {types.map(type => (
-                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterProperty} onValueChange={setFilterProperty}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Bien" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous biens</SelectItem>
-                {properties.map(prop => (
-                  <SelectItem key={prop.id} value={prop.id}>{prop.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Année" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes années</SelectItem>
-                {availableYears.map(year => (
-                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </motion.div>
-
-        {/* Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.3 }}
-        >
-          <AnimatedCard className="overflow-hidden" delay={0.4}>
-            <CardContent className="p-0">
-              <TransactionTable 
-                searchQuery={searchQuery}
-                filterType={filterType}
-                filterCategory={filterCategory}
-                filterProperty={filterProperty}
-                filterMonth={filterMonth}
-                onEdit={handleEdit}
-                onDuplicate={handleDuplicate}
-                refreshTrigger={refreshTrigger}
-                onTransactionsLoaded={handleTransactionsLoaded}
-              />
-            </CardContent>
-          </AnimatedCard>
-        </motion.div>
-
-        {/* Modal */}
-        <TransactionModal 
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          transactionId={selectedTransactionId}
-          transactionToClone={transactionToClone}
-        />
+        <span className="text-gray-500 flex items-center gap-1 min-w-max">
+          <Filter className="text-blue-400" size={20} strokeWidth={2} /> Filtrer :
+        </span>
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="input-glass min-w-[140px]">
+            <SelectValue placeholder="Catégorie" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes catégories</SelectItem>
+            {categories.map(cat => (
+              <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="input-glass min-w-[110px]">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous types</SelectItem>
+            {types.map(type => (
+              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterProperty} onValueChange={setFilterProperty}>
+          <SelectTrigger className="input-glass min-w-[110px]">
+            <SelectValue placeholder="Bien" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous biens</SelectItem>
+            {properties.map(prop => (
+              <SelectItem key={prop.id} value={prop.id}>{prop.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="input-glass min-w-[110px]">
+            <SelectValue placeholder="Année" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes années</SelectItem>
+            {availableYears.map(year => (
+              <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <button
+            className={`reset-filters-btn ml-2 p-1 rounded-full transition-opacity duration-200 reset-pulse-anim opacity-90 cursor-pointer`}
+            style={{ background: 'rgba(255,255,255,0.65)', border: '1.2px solid #3b82f6' }}
+            onClick={resetFilters}
+            title="Réinitialiser les filtres"
+            aria-label="Réinitialiser les filtres"
+            tabIndex={0}
+            type="button"
+          >
+            <Eraser
+              size={20}
+              className={'text-blue-500 drop-shadow-[0_0_6px_#3b82f6cc]'}
+            />
+          </button>
+        )}
       </div>
-    </PageTransition>
+
+      {/* Cartes totaux stylisées glassmorphism - icônes adaptées, bilan bleu */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {/* Revenus */}
+        {(() => {
+          const [isHovered, setIsHovered] = useState(false);
+          return (
+            <div
+              className="card-glass green relative flex flex-col justify-center p-6 overflow-hidden"
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+            >
+              <TrendingUp size={70} className="absolute opacity-10 right-2 top-2 text-green-400 pointer-events-none" />
+              <div className="text-xs font-semibold text-green-700 mb-1 z-10">+ Revenus</div>
+              <motion.div
+                animate={isHovered ? { scale: 1.08, color: '#22c55e', textShadow: '0 0 8px #22c55e88' } : { scale: 1, color: '#166534', textShadow: 'none' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                className="text-2xl font-bold text-green-800 z-10"
+              >
+                {totalIncome.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+              </motion.div>
+            </div>
+          );
+        })()}
+        {/* Dépenses */}
+        {(() => {
+          const [isHovered, setIsHovered] = useState(false);
+          return (
+            <div
+              className="card-glass red relative flex flex-col justify-center p-6 overflow-hidden"
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+            >
+              <TrendingDown size={70} className="absolute opacity-10 right-2 top-2 text-red-400 pointer-events-none" />
+              <div className="text-xs font-semibold text-red-700 mb-1 z-10">- Dépenses</div>
+              <motion.div
+                animate={isHovered ? { scale: 1.08, color: '#ef4444', textShadow: '0 0 8px #ef444488' } : { scale: 1, color: '#991b1b', textShadow: 'none' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                className="text-2xl font-bold text-red-800 z-10"
+              >
+                {totalExpense.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+              </motion.div>
+            </div>
+          );
+        })()}
+        {/* Bilan */}
+        {(() => {
+          const [isHovered, setIsHovered] = useState(false);
+          return (
+            <div
+              className="card-glass blue relative flex flex-col justify-center p-6 overflow-hidden"
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+            >
+              <Sigma size={70} className="absolute opacity-10 right-2 top-2 text-blue-400 pointer-events-none" />
+              <div className="text-xs font-semibold text-blue-700 mb-1 z-10">∑ Bilan</div>
+              <motion.div
+                animate={isHovered ? { scale: 1.08, color: '#2563eb', textShadow: '0 0 8px #60a5fa88' } : { scale: 1, color: '#1e3a8a', textShadow: 'none' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                className="text-2xl font-bold text-blue-800 z-10"
+              >
+                {balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+              </motion.div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4, duration: 0.3 }}
+      >
+        <AnimatedCard className="overflow-hidden" delay={0.4}>
+          <CardContent className="p-0">
+            <TransactionTable 
+              searchQuery={searchQuery}
+              filterType={filterType}
+              filterCategory={filterCategory}
+              filterProperty={filterProperty}
+              filterMonth={filterMonth}
+              onEdit={handleEdit}
+              onDuplicate={handleDuplicate}
+              refreshTrigger={refreshTrigger}
+              onTransactionsLoaded={handleTransactionsLoaded}
+            />
+          </CardContent>
+        </AnimatedCard>
+      </motion.div>
+
+      {/* Modal */}
+      <TransactionModal 
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        transactionId={selectedTransactionId}
+        transactionToClone={transactionToClone}
+      />
+    </div>
   )
 }

@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ComboboxPlatform } from "@/components/ui/combobox-platform";
 import { motion } from "framer-motion";
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 
@@ -33,8 +33,8 @@ interface TransactionFormFieldsProps {
 }
 
 const typeColors: Record<string, string> = {
-  income: 'bg-green-100 text-green-700',
-  expense: 'bg-red-100 text-red-700',
+  income: 'bg-green-800 text-green-200',
+  expense: 'bg-red-900 text-red-200',
 };
 
 const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
@@ -76,14 +76,20 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
   const selectedProperty = properties.find(p => p.id === formData.property_id);
   const isSaisonnier = selectedProperty && ((selectedProperty.categoryName && selectedProperty.categoryName.toLowerCase().includes('saison')) || (selectedProperty.category && selectedProperty.category.toLowerCase().includes('saison')));
 
+  // Animation de l'icône principale : "danse" en boucle tant que la modale est ouverte
+  const [iconLoop, setIconLoop] = React.useState(true);
+
+  // Ajout du state pour l'animation de danse
+  const [dancing, setDancing] = React.useState(false);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* HEADER PRINCIPAL */}
       <div className="flex items-center gap-3 mb-10 mt-4">
         <motion.div
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className={`rounded-full p-2 shadow ${typeColors[formData.transaction_type] || 'bg-gray-100 text-gray-700'}`}
+          animate={{ scale: [1, 1.18, 0.95, 1.1, 1], rotate: [0, 12, -10, 8, 0] }}
+          transition={{ duration: 1.8, repeat: Infinity, repeatType: 'loop', ease: 'easeInOut' }}
+          className={`rounded-full p-2 shadow ${formData.transaction_type === 'income' ? 'bg-green-800 text-green-200' : formData.transaction_type === 'expense' ? 'bg-red-900 text-red-200' : 'bg-gray-100 text-gray-700'}`}
         >
           {formData.transaction_type === 'income' ? (
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -204,6 +210,23 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
               <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold ${formData.transaction_type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{formData.transaction_type === 'income' ? '+' : '-'} €</span>
             )}
           </div>
+        </div>
+        <div>
+          <Label htmlFor="nb_months" className="mb-2 block">Nombre de mois couverts</Label>
+          <Input
+            id="nb_months"
+            type="number"
+            min={1}
+            value={formData.nb_months || 1}
+            onChange={e => setFormData((prev: any) => ({ ...prev, nb_months: Math.max(1, Number(e.target.value)) }))}
+            disabled={isLoading}
+            style={{ maxWidth: 120 }}
+          />
+          {formData.nb_months > 1 && formData.amount && (
+            <div className="text-xs text-gray-500 mt-1">
+              Montant par mois : {(Number(formData.amount) / formData.nb_months).toFixed(2)} €
+            </div>
+          )}
         </div>
         <div>
           <Label htmlFor="date">Date</Label>
@@ -379,15 +402,58 @@ const TransactionFormFields: React.FC<TransactionFormFieldsProps> = ({
       </div>
       {/* BOUTONS */}
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={isLoading} className="rounded-full px-6">
-          Annuler
-        </Button>
-        <Button type="submit" variant="default" disabled={isLoading} className="rounded-full px-8 flex items-center gap-2 shadow-md hover:shadow-lg transition">
-          {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : (
-            transactionId ? <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-          )}
-          {transactionId ? 'Enregistrer' : 'Ajouter'}
-        </Button>
+        <button
+          type="button"
+          className={`btn-glass w-fit btn-cancel-white-blue group ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+          style={{ minWidth: 'fit-content', maxWidth: '320px', overflow: 'hidden', position: 'relative', marginBottom: '0.08em', background: '#fff', color: 'var(--si-blue)' }}
+          disabled={isLoading}
+          onClick={() => onClose(false)}
+        >
+          <span className="relative flex items-center gap-2">
+            <motion.span
+              className="inline-block"
+              animate={undefined}
+              whileHover={undefined}
+              whileTap={undefined}
+            >
+              <svg className="w-4 h-4 group-hover:pulse-anim" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
+            </motion.span>
+            Annuler
+          </span>
+        </button>
+        <button
+          type="submit"
+          className={`btn-glass w-fit btn-animated-yellow group ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          style={{ minWidth: 'fit-content', maxWidth: '320px', overflow: 'hidden', position: 'relative', marginBottom: '0.08em' }}
+          disabled={isLoading}
+        >
+          <span className="btn-animated-yellow-bg" />
+          <span className="relative flex items-center gap-2 group"
+            onMouseEnter={() => setDancing(true)}
+            onMouseLeave={() => setDancing(false)}
+          >
+            <motion.span
+              className="inline-block"
+              animate={dancing ? "dance" : "idle"}
+              variants={{
+                dance: { rotate: [0, 18, -14, 10, 0], scale: [1, 1.13, 0.93, 1.08, 1], transition: { duration: 1.2, repeat: Infinity, repeatType: 'loop', ease: 'easeInOut' } },
+                idle: { rotate: 0, scale: 1 }
+              }}
+              initial="idle"
+            >
+              {isLoading ? (
+                <svg className="animate-spin w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
+              ) : (
+                transactionId ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                )
+              )}
+            </motion.span>
+            {transactionId ? 'Enregistrer' : 'Ajouter'}
+          </span>
+        </button>
       </div>
     </form>
   );

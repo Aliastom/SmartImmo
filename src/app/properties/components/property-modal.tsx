@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { motion } from 'framer-motion'
-import { PropertyRegimeSelector } from '@/components/property/property-regime-selector'
+import { PropertyRegimeSelector } from '../[id]/components/property-regime-selector'
 import axios from 'axios';
 
 interface PropertyModalProps {

@@ -1,0 +1,21 @@
+/* Animation de remplissage gauche-droite pour le bouton SmartImmo */
+.smartimmo-fill {
+  transform: scaleX(0);
+  opacity: 0;
+  transform-origin: left;
+  transition: transform 0.7s cubic-bezier(.55,.1,.5,1.1), opacity 0.3s;
+  will-change: transform, opacity;
+  width: 100%;
+  height: 100%;
+  display: block;
+  left: 0; top: 0; right: 0; bottom: 0; position: absolute;
+}
+.smartimmo-btn:hover .smartimmo-fill,
+.smartimmo-btn:focus .smartimmo-fill {
+  transform: scaleX(1);
+  opacity: 1;
+}
+.smartimmo-btn:hover .smartimmo-text,
+.smartimmo-btn:focus .smartimmo-text {
+  color: #181a3b !important;
+}

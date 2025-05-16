@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
@@ -31,6 +32,9 @@ type Tenant = Database['public']['Tables']['tenants']['Row']
 type Lease = Database['public']['Tables']['leases']['Row']
 
 export default function NewTenantPage() {
+  const [isButtonHovered, setIsButtonHovered] = useState(false);
+  const [isSelectHovered, setIsSelectHovered] = useState<string | null>(null);
+  const [isCancelHovered, setIsCancelHovered] = useState(false);
   const router = useRouter()
   const searchParams = useSearchParams()
   const propertyId = searchParams.get('propertyId')
@@ -323,12 +327,8 @@ export default function NewTenantPage() {
           <p className="text-gray-500">Bien: {property.name}</p>
         </div>
         <div className="space-x-2">
-          <Button variant="outline" onClick={() => router.push('/properties/' + propertyId)}>
-            Annuler
-          </Button>
-          <Button onClick={() => setIsTenantDialogOpen(true)}>
-            Sélectionner un locataire existant
-          </Button>
+          
+         
         </div>
       </div>
 
@@ -409,12 +409,120 @@ export default function NewTenantPage() {
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                type="submit"
-                disabled={isLoading || isRentInvalid}
-              >
-                {isLoading ? 'Traitement en cours...' : (changeMode ? 'Changer le locataire' : 'Ajouter le locataire')}
-              </Button>
+<div className="flex flex-row gap-3 w-full justify-end pt-4">
+  {/* Annuler Button */}
+  <Button
+    type="button"
+    variant="outline"
+    className="relative flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-gray-300 bg-white text-gray-700 font-semibold shadow group overflow-hidden hover:bg-gray-50 transition"
+    style={{ minWidth: 'fit-content' }}
+    onClick={() => {
+      // If in a modal/dialog context, close dialog. Otherwise, go back in history.
+      if (window.history.length > 1) {
+        router.back();
+      } else {
+        window.location.href = '/properties';
+      }
+    }}
+    onMouseEnter={() => setIsCancelHovered(true)}
+    onMouseLeave={() => setIsCancelHovered(false)}
+  >
+    <motion.span
+      className="inline-flex items-center"
+      animate={isCancelHovered ? 'dance' : 'idle'}
+      variants={{
+        dance: {
+          x: [0, -6, 3, -4, 0],
+          rotate: [0, -18, 12, -10, 0],
+          transition: {
+            repeat: Infinity,
+            repeatType: 'loop',
+            duration: 1.1,
+            ease: 'easeInOut',
+          },
+        },
+        idle: {},
+      }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      </svg>
+    </motion.span>
+    Annuler
+  </Button>
+
+  {/* Sélectionner un locataire existant Button */}
+  <Button
+    type="button"
+    className="btn-glass btn-animated-yellow flex items-center gap-2 px-4 py-2 rounded-lg shadow transition relative group text-base font-semibold"
+    style={{ minWidth: 'fit-content', maxWidth: '320px', overflow: 'hidden', position: 'relative', whiteSpace: 'nowrap' }}
+    onClick={() => setIsTenantDialogOpen(true)}
+    onMouseEnter={() => setIsSelectHovered('main')}
+    onMouseLeave={() => setIsSelectHovered(null)}
+  >
+    <span className="btn-animated-yellow-bg absolute inset-0 rounded-lg pointer-events-none transition-transform duration-300 group-hover:scale-100 scale-0 z-0" aria-hidden="true"></span>
+    <span className="relative flex items-center z-10 font-semibold">
+      <motion.span
+        className="inline-flex items-center"
+        animate={isSelectHovered === 'main' ? 'dance' : 'idle'}
+        variants={{
+          dance: {
+            rotate: [0, -20, 20, -20, 20, 0],
+            scale: [1, 1.2, 1.1, 1.2, 1],
+            transition: {
+              repeat: Infinity,
+              repeatType: 'loop',
+              duration: 1.2,
+              ease: 'easeInOut',
+            },
+          },
+          idle: {},
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </motion.span>
+      Sélectionner un locataire existant
+    </span>
+  </Button>
+
+  {/* Ajouter/Changer Button (submit) */}
+  <Button
+    type="submit"
+    disabled={isLoading || isRentInvalid}
+    className="btn-glass btn-animated-yellow flex items-center gap-2 px-4 py-2 rounded-lg shadow transition relative group text-base"
+    style={{ minWidth: 'fit-content', maxWidth: '320px', overflow: 'hidden', position: 'relative', whiteSpace: 'nowrap' }}
+    onMouseEnter={() => setIsButtonHovered(true)}
+    onMouseLeave={() => setIsButtonHovered(false)}
+  >
+    <span className="btn-animated-yellow-bg absolute inset-0 rounded-lg pointer-events-none transition-transform duration-300 group-hover:scale-100 scale-0 z-0" aria-hidden="true"></span>
+    <span className="relative flex items-center z-10 font-semibold">
+      <motion.span
+        className="inline-flex items-center"
+        animate={isButtonHovered ? 'dance' : 'idle'}
+        variants={{
+          dance: {
+            rotate: [0, -20, 20, -20, 20, 0],
+            scale: [1, 1.2, 1.1, 1.2, 1],
+            transition: {
+              repeat: Infinity,
+              repeatType: 'loop',
+              duration: 1.2,
+              ease: 'easeInOut',
+            },
+          },
+          idle: {},
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </motion.span>
+      {isLoading ? 'Traitement en cours...' : (changeMode ? 'Changer le locataire' : 'Ajouter le locataire')}
+    </span>
+  </Button>
+</div>
             </div>
           </form>
         </CardContent>
@@ -467,12 +575,40 @@ export default function NewTenantPage() {
                       <TableCell className="font-medium">{tenant.first_name} {tenant.last_name}</TableCell>
                       <TableCell className="text-right">
                         <Button
-                          size="sm"
-                          onClick={() => handleSelectTenant(tenant)}
-                          disabled={isLoading}
-                        >
-                          Sélectionner
-                        </Button>
+  size="sm"
+  onClick={() => handleSelectTenant(tenant)}
+  disabled={isLoading}
+  className="btn-glass btn-animated-yellow flex items-center gap-2 px-3 py-1.5 rounded-lg shadow transition relative group text-sm"
+  style={{ minWidth: 'fit-content', maxWidth: '220px', overflow: 'hidden', position: 'relative', whiteSpace: 'nowrap' }}
+  onMouseEnter={() => setIsSelectHovered && setIsSelectHovered(tenant.id)}
+  onMouseLeave={() => setIsSelectHovered && setIsSelectHovered(null)}
+>
+  <span className="btn-animated-yellow-bg absolute inset-0 rounded-lg pointer-events-none transition-transform duration-300 group-hover:scale-100 scale-0 z-0" aria-hidden="true"></span>
+  <span className="relative flex items-center z-10 font-semibold">
+    <motion.span
+      className="inline-flex items-center"
+      animate={isSelectHovered === tenant.id ? "dance" : "idle"}
+      variants={{
+        dance: {
+          rotate: [0, -20, 20, -20, 20, 0],
+          scale: [1, 1.2, 1.1, 1.2, 1],
+          transition: {
+            repeat: Infinity,
+            repeatType: 'loop',
+            duration: 1.2,
+            ease: 'easeInOut',
+          },
+        },
+        idle: {},
+      }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+    </motion.span>
+    Sélectionner
+  </span>
+</Button>
                       </TableCell>
                     </TableRow>
                   ))}

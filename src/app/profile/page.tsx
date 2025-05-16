@@ -13,6 +13,7 @@ import { SecurityForm } from './security-form'
 import { Separator } from '@/components/ui/separator'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnimatedCard, PageTransition, LoadingSpinner, AnimatedTabsContent } from '@/components/ui/animated'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -315,6 +316,7 @@ export default function ProfilePage() {
 
   return (
     <PageTransition className="container py-10">
+      <PageHeader title="Profil" />
       <div className="mx-auto max-w-5xl">
         <motion.h1 
           className="text-3xl font-bold mb-8"

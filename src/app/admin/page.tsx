@@ -5,6 +5,8 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import CategoryTypeModal from './CategoryTypeModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import { AnimatedCard, LoadingSpinner, PageTransition } from '@/components/ui/animated'
+import { PageHeader } from '@/components/ui/page-header'
 
 interface Category {
   id: string;
@@ -198,16 +200,24 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto py-10 px-4">
-      <h1 className="text-3xl font-bold mb-10 text-gray-800 flex items-center gap-4">
-        <span>Administration</span>
-        <span className="inline-block animate-spin">
-          {/* Icône engrenage SVG plus grand et plus "classique" */}
-          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 48 48" className="w-14 h-14 text-indigo-500">
-            <path d="M40.7 27c.1-.6.1-1.3.1-2s0-1.4-.1-2l4.1-3.2c.4-.3.5-.9.2-1.4l-3.9-6.8c-.2-.4-.8-.6-1.3-.4l-4.8 1.9c-1-.8-2.1-1.5-3.2-2l-.7-5c-.1-.5-.5-.9-1-.9h-7.8c-.5 0-.9.4-1 .9l-.7 5c-1.1.5-2.2 1.2-3.2 2l-4.8-1.9c-.5-.2-1.1 0-1.3.4l-3.9 6.8c-.3.5-.2 1.1.2 1.4l4.1 3.2c-.1.6-.1 1.3-.1 2s0 1.4.1 2l-4.1 3.2c-.4.3-.5.9-.2 1.4l3.9 6.8c.2.4.8.6 1.3.4l4.8-1.9c1 .8 2.1 1.5 3.2 2l.7 5c.1.5.5.9 1 .9h7.8c.5 0 .9-.4 1-.9l.7-5c1.1-.5 2.2-1.2 3.2-2l4.8 1.9c.5.2 1.1 0 1.3-.4l3.9-6.8c.3-.5.2-1.1-.2-1.4l-4.1-3.2zM24 31c-3.9 0-7-3.1-7-7s3.1-7 7-7 7 3.1 7 7-3.1 7-7 7z"/>
+    <PageTransition className="min-h-screen flex flex-col gap-10 px-0 md:px-0">
+      <PageHeader
+        title="Administration"
+        buttonText="Ajouter une catégorie/type"
+        buttonIcon={
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 mr-2 btn-add-icon"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-        </span>
-      </h1>
+        }
+        onButtonClick={openAddCategoryModal}
+        className="mb-6 mt-2 px-0"
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Catégories */}
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
@@ -325,6 +335,6 @@ export default function AdminPage() {
         onConfirm={handleConfirmDelete}
         loading={deleteLoading}
       />
-    </div>
+    </PageTransition>
   );
 }

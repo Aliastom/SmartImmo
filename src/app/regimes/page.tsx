@@ -8,10 +8,11 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
 import { PropertyRegime } from "@/types/property-regimes"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { PropertyRegimeDetails } from "@/components/property/property-regime-details"
+import { PropertyRegimeDetails } from "../properties/[id]/components/property-regime-details"
 import { motion } from 'framer-motion'
-import { PageTransition, AnimatedCard, LoadingSpinner } from '@/components/ui/animated'
+import { AnimatedCard, LoadingSpinner, PageTransition } from '@/components/ui/animated'
 import { Badge } from "@/components/ui/badge"
+import { PageHeader } from '@/components/ui/page-header'
 
 export default function RegimesPage() {
   const [regimes, setRegimes] = useState<PropertyRegime[]>([])
@@ -64,45 +65,25 @@ export default function RegimesPage() {
   }
   
   return (
-    <PageTransition className="container py-10">
+    <PageTransition className="min-h-screen flex flex-col gap-10 px-0 md:px-0">
+      <PageHeader
+        title="Régimes Fiscaux Immobiliers"
+        buttonText="Ajouter un régime"
+        buttonIcon={
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 mr-2 btn-add-icon"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        }
+        onButtonClick={() => {/* Ajoute ici la logique d'ajout */}}
+        className="mb-6 mt-2 px-0"
+      />
       <div className="space-y-8">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <motion.h1 
-            className="text-3xl font-bold text-gray-800"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            Régimes Fiscaux Immobiliers
-          </motion.h1>
-          <motion.div 
-            className="flex items-center space-x-4"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-          >
-            <div className="relative">
-              <Input 
-                type="text" 
-                placeholder="Rechercher..." 
-                className="pl-10 w-64"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </motion.div>
-        </div>
-
         {/* Description */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

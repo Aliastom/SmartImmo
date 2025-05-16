@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { motion } from 'framer-motion'
-import { PageTransition, AnimatedCard, LoadingSpinner } from '@/components/ui/animated'
+import { AnimatedCard, LoadingSpinner, PageTransition } from '@/components/ui/animated'
 import { DocumentList } from './components/document-list'
 import DocumentUploadModal from './components/document-upload-modal'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default function DocumentsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -80,41 +81,25 @@ export default function DocumentsPage() {
   }
 
   return (
-    <PageTransition className="container py-10">
+    <PageTransition className="min-h-screen flex flex-col gap-10 px-0 md:px-0">
+      <PageHeader
+        title="Documents"
+        buttonText="Ajouter un document"
+        buttonIcon={
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 mr-2 btn-add-icon"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        }
+        onButtonClick={() => setIsModalOpen(true)}
+        className="mb-6 mt-2 px-0"
+      />
       <div className="space-y-8">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <motion.h1 
-            className="text-3xl font-bold text-gray-800"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            Gestion des Documents
-          </motion.h1>
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-          >
-            <Button 
-              onClick={() => setIsModalOpen(true)}
-              className="bg-black hover:bg-black/80 text-white"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-4 w-4 mr-2" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Ajouter un document
-            </Button>
-          </motion.div>
-        </div>
-
         {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

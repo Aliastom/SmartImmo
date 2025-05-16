@@ -40,22 +40,23 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
   const today = new Date().toISOString().split('T')[0]
   const currentMonth = new Date().toISOString().slice(0, 7) // Format YYYY-MM pour accounting_month
   
-  const [formData, setFormData] = useState({
-    property_id: '',
-    transaction_type: '', // 'income' ou 'expense'
+  const [formData, setFormData] = useState<any>({
+    property_id: propertyId || '',
+    transaction_type: '',
     category: '',
-    type: '', // type lié à la catégorie
+    type: '',
     amount: '',
     date: today,
     accounting_month: currentMonth,
+    nb_months: 1, // Ajouté ici
     description: '',
     platform: '',
     reservation_ref: '',
     guest_name: '',
     notes: '',
     start_date: '',
-    end_date: ''
-  })
+    end_date: '',
+  });
   const { toast } = useToast()
 
   const [categories, setCategories] = useState<any[]>([]);
@@ -195,7 +196,8 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
             guest_name: baseTransaction.guest_name || '',
             notes: baseTransaction.notes || '',
             start_date: baseTransaction.start_date || '',
-            end_date: baseTransaction.end_date || ''
+            end_date: baseTransaction.end_date || '',
+            nb_months: 1, // Ajouté ici
           });
           setFormInitialized(true);
         }
@@ -420,6 +422,8 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
         return;
       }
 
+      // --- LOGIQUE NB_MONTHS ---
+
       if (formData.category === 'loyer' && formData.transaction_type === 'income') {
         if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
           toast({
@@ -431,121 +435,157 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
           return;
         }
       }
-      
-      const transactionData = {
-        ...formData,
-        amount: parseFloat(formData.amount),
-        user_id: user.id, // Ajoute l'ID de l'utilisateur ici !
-        start_date: formData.start_date?.trim() ? formData.start_date : null,
-        end_date: formData.end_date?.trim() ? formData.end_date : null,
-      }
-      let transactionRes
+
+      // --- LOGIQUE NB_MONTHS ---
+      const nbMonths = parseInt(formData.nb_months, 10) || 1;
+      const totalAmount = Number(formData.amount);
+      const monthlyAmount = Math.round((totalAmount / nbMonths) * 100) / 100;
+      const accountingMonth = formData.accounting_month; // format 'YYYY-MM'
+      const [year, month] = accountingMonth.split('-').map(Number);
+      console.log("DEBUG accounting_month:", accountingMonth, "year:", year, "month:", month);
+      const { nb_months, ...formDataWithoutNbMonths } = formData;
+
+      let transactionIds = [];
+
       if (transactionId) {
-        transactionRes = await supabase
+        // Edition d'une seule transaction (comportement classique)
+        const transactionData = {
+          ...formDataWithoutNbMonths,
+          amount: parseFloat(formData.amount),
+          user_id: user.id,
+          start_date: formData.start_date?.trim() ? formData.start_date : null,
+          end_date: formData.end_date?.trim() ? formData.end_date : null,
+        };
+        const transactionRes = await supabase
           .from('transactions')
           .update(transactionData)
           .eq('id', transactionId)
           .select()
-          .single()
+          .single();
+        if (transactionRes.error || !transactionRes.data) {
+          toast({
+            title: "Erreur",
+            description: transactionRes.error?.message || "Impossible de modifier la transaction.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          return;
+        }
+        transactionIds.push(transactionRes.data.id);
       } else {
-        transactionRes = await supabase
-          .from('transactions')
-          .insert([transactionData])
-          .select()
-          .single()
+        // Création multi-mois
+        let transactionsToInsert = [];
+        for (let i = 0; i < nbMonths; i++) {
+          const dateObj = new Date(year, month - 1 + i);
+          const monthStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          transactionsToInsert.push({
+            ...formDataWithoutNbMonths,
+            amount: monthlyAmount,
+            accounting_month: monthStr,
+            user_id: user.id,
+            start_date: formData.start_date?.trim() ? formData.start_date : null,
+            end_date: formData.end_date?.trim() ? formData.end_date : null,
+          });
+        }
+        const { data: inserted, error } = await supabase.from('transactions').insert(transactionsToInsert).select();
+        if (error || !inserted) {
+          toast({
+            title: "Erreur",
+            description: error?.message || "Impossible de créer les transactions.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          return;
+        }
+        transactionIds = inserted.map(tx => tx.id);
       }
-      if (transactionRes.error || !transactionRes.data) {
-        toast({
-          title: "Erreur",
-          description: transactionRes.error?.message || "Impossible de créer la transaction.",
-          variant: "destructive"
-        })
-        return
-      }
-      const txnId = transactionRes.data.id
+
       // --- Handle attachments upload ---
-      if (attachments.length > 0) {
-        for (const file of attachments) {
-          // Générer un chemin unique pour le fichier (même logique que la modale principale)
-          const fileExtension = file.name.split('.').pop() || '';
-          const fileName = `${Date.now()}_${file.name}`;
-          const filePath = `${user.id}/transactions/${txnId}/${fileName}`;
+      if (attachments.length > 0 && transactionIds.length > 0) {
+        for (const txId of transactionIds) {
+          for (const file of attachments) {
+            const fileExtension = file.name.split('.').pop() || '';
+            const fileName = `${Date.now()}_${file.name}`;
+            const filePath = `${user.id}/transactions/${txId}/${fileName}`;
 
-          // Upload storage avec options
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('documents')
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: false
-            });
-          if (uploadError) {
-            toast({ title: 'Erreur', description: `Erreur lors de l'upload de ${file.name}` })
-            console.error('Erreur upload storage:', uploadError)
-            continue
-          }
+            // Upload storage avec options
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('documents')
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+            if (uploadError) {
+              toast({ title: 'Erreur', description: `Erreur lors de l'upload de ${file.name}` })
+              console.error('Erreur upload storage:', uploadError)
+              continue
+            }
 
-          // Insert document record (avec user_id et metadata)
-          const { data: docInsert, error: docError } = await supabase
-            .from('documents')
-            .insert({
-              user_id: user.id,
-              name: file.name,
-              file_path: filePath,
-              file_size: file.size,
-              mime_type: file.type,
-              type: 'attachment',
-              category: 'transaction',
-              metadata: { original_filename: file.name }
-            })
-            .select()
-            .single();
-          if (docError || !docInsert) {
-            console.error('Erreur insert documents:', docError);
-            continue;
-          }
-          // Insert relation in transaction_documents
-          const { error: relError } = await supabase
-            .from('transaction_documents')
-            .insert({
-              transaction_id: txnId,
-              document_id: docInsert.id,
-            });
-          if (relError) {
-            console.error('Erreur insert transaction_documents:', relError);
+            // Insert document record (avec user_id et metadata)
+            const { data: docInsert, error: docError } = await supabase
+              .from('documents')
+              .insert({
+                user_id: user.id,
+                name: file.name,
+                file_path: filePath,
+                file_size: file.size,
+                mime_type: file.type,
+                type: 'attachment',
+                category: 'transaction',
+                metadata: { original_filename: file.name }
+              })
+              .select()
+              .single();
+            if (docError || !docInsert) {
+              console.error('Erreur insert documents:', docError);
+              continue;
+            }
+            // Insert relation in transaction_documents
+            const { error: relError } = await supabase
+              .from('transaction_documents')
+              .insert({
+                transaction_id: txId,
+                document_id: docInsert.id,
+              });
+            if (relError) {
+              console.error('Erreur insert transaction_documents:', relError);
+            }
           }
         }
       }
       // --- Lier les pièces jointes existantes lors de la duplication ---
-      if (!transactionId && existingAttachments.length > 0) {
-        for (const doc of existingAttachments) {
-          const { error: relError } = await supabase
-            .from('transaction_documents')
-            .insert({
-              transaction_id: txnId,
-              document_id: doc.id,
-            });
-          if (relError) {
-            console.error('Erreur insert transaction_documents (duplication):', relError);
+      if (!transactionId && existingAttachments.length > 0 && transactionIds.length > 0) {
+        for (const txId of transactionIds) {
+          for (const doc of existingAttachments) {
+            const { error: relError } = await supabase
+              .from('transaction_documents')
+              .insert({
+                transaction_id: txId,
+                document_id: doc.id,
+              });
+            if (relError) {
+              console.error('Erreur insert transaction_documents (duplication):', relError);
+            }
           }
         }
       }
       toast({
         title: "Succès",
-        description: transactionId ? "Transaction modifiée avec succès." : "Transaction créée avec succès.",
-      })
-      setTransactionSaved(true)
-      setAttachments([])
-      if (attachmentsInputRef.current) attachmentsInputRef.current.value = ''
-      onClose(true)
+        description: transactionId ? "Transaction modifiée avec succès." : "Transactions créées avec succès.",
+      });
+      setTransactionSaved(true);
+      setAttachments([]);
+      if (attachmentsInputRef.current) attachmentsInputRef.current.value = '';
+      onClose(true);
     } catch (error) {
-      console.error('Erreur lors de la soumission du formulaire:', error)
+      console.error('Erreur lors de la soumission du formulaire:', error);
       toast({
         title: "Erreur",
         description: "Une erreur s'est produite lors du traitement de la transaction.",
         variant: "destructive"
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 

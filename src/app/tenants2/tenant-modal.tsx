@@ -235,6 +235,7 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
                           placeholder="Adresse email du locataire"
                           value={formData.email}
                           onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                          required
                           className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm"
                         />
                       </td>
@@ -249,6 +250,7 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
                           type="tel"
                           value={formData.phone}
                           onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                          required
                           className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm"
                         />
                       </td>

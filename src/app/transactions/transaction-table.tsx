@@ -135,15 +135,32 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
           query = query.eq('accounting_month', filterMonth)
         }
       }
-      if (searchQuery) {
-        query = query.or(`description.ilike.%${searchQuery}%,property.name.ilike.%${searchQuery}%`)
+      const safeQuery = searchQuery ? searchQuery.trim().toLowerCase() : '';
+      let filteredTransactions: Transaction[] = [];
+      const { data, error } = await query;
+      if (error) throw error;
+      if (safeQuery.length > 0) {
+        filteredTransactions = (data || []).filter(tx => {
+          const descMatch = tx.description?.toLowerCase().includes(safeQuery);
+          const propMatch = tx.property?.name?.toLowerCase().includes(safeQuery);
+          const dateMatch = tx.date && new Date(tx.date).toLocaleDateString('fr-FR').toLowerCase().includes(safeQuery);
+          const monthRaw = tx.accounting_month;
+          let monthDisplay = '';
+          if (monthRaw && typeof monthRaw === 'string') {
+            const [year, month] = monthRaw.split('-');
+            if (year && month) {
+              const date = new Date(parseInt(year), parseInt(month) - 1);
+              monthDisplay = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+            }
+          }
+          const monthMatch = monthDisplay.toLowerCase().includes(safeQuery) || monthRaw?.toLowerCase().includes(safeQuery);
+          const amountMatch = String(tx.amount ?? '').toLowerCase().includes(safeQuery);
+          return descMatch || propMatch || dateMatch || monthMatch || amountMatch;
+        });
+      } else {
+        filteredTransactions = data || [];
       }
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      setTransactions(data || [])
+      setTransactions(filteredTransactions);
     } catch (error: any) {
       console.error('Error:', error)
       toast({
@@ -263,16 +280,27 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
+
+  // Transactions à afficher pour la page courante
+  const paginatedTransactions = sortedTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   // Rendu mobile avec cartes au lieu de tableau
   if (isMobile) {
     return (
       <div className="space-y-4">
         {isLoading ? (
           <div className="text-center p-4">Chargement...</div>
-        ) : sortedTransactions.length === 0 ? (
+        ) : paginatedTransactions.length === 0 ? (
           <div className="text-center p-4 text-gray-500">Aucune transaction trouvée</div>
         ) : (
-          sortedTransactions.map((transaction) => (
+          paginatedTransactions.map((transaction) => (
             <motion.div
               key={transaction.id}
               initial={{ opacity: 0, y: 20 }}
@@ -349,7 +377,7 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
   // Rendu desktop avec tableau
   return (
     <div className="overflow-x-auto">
-      <Table>
+      <Table className="table-glass">
         <TableHeader>
           <TableRow>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Date</TableHead>
@@ -370,15 +398,21 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedTransactions.length === 0 ? (
+          {isLoading ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-gray-500">
-                Aucune transaction trouvée
+              <TableCell colSpan={8} className="text-center py-6">
+                <span className="text-gray-400">Chargement...</span>
+              </TableCell>
+            </TableRow>
+          ) : paginatedTransactions.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center py-6">
+                <span className="text-gray-400">Aucune transaction trouvée.</span>
               </TableCell>
             </TableRow>
           ) : (
-            sortedTransactions.map((transaction) => (
-              <TableRow key={transaction.id}>
+            paginatedTransactions.map((transaction) => (
+              <TableRow key={transaction.id} onClick={() => onEdit(transaction.id)} style={{ cursor: 'pointer' }}>
                 <TableCell>{formatDate(transaction.date)}</TableCell>
                 <TableCell>{getCategoryLabelById(transaction.category)}</TableCell>
                 <TableCell>{getTypeLabelById(transaction.type)}</TableCell>
@@ -401,8 +435,8 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="hover:bg-gray-100"
-                      onClick={() => onEdit(transaction.id)}
+                      className="icon-action hover:bg-gray-100"
+                      onClick={e => { e.stopPropagation(); onEdit(transaction.id); }}
                     >
                       {/* Icône crayon identique à property-transactions */}
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -412,8 +446,8 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="hover:bg-gray-100"
-                      onClick={() => onDuplicate(transaction)}
+                      className="icon-action hover:bg-gray-100"
+                      onClick={e => { e.stopPropagation(); onDuplicate(transaction); }}
                     >
                       {/* Icône double-carré (dupliquer) */}
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -423,8 +457,8 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                      onClick={() => deleteTransaction(transaction.id)}
+                      className="icon-action text-red-600 hover:text-red-800 hover:bg-red-50"
+                      onClick={e => { e.stopPropagation(); deleteTransaction(transaction.id); }}
                       disabled={isDeleting}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -438,6 +472,30 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
           )}
         </TableBody>
       </Table>
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-3 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Précédent
+          </Button>
+          <span className="text-sm font-medium">
+            Page {currentPage} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Suivant
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

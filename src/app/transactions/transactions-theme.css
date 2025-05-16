@@ -1,0 +1,636 @@
+/* SmartImmo Glassmorphism Theme for Transactions */
+:root {
+  --si-bg-main: #f7f7fb;
+  --si-bg-glass: rgba(255,255,255,0.72);
+  --si-bg-glass-dark: rgba(24,26,59,0.82);
+  --si-blur: blur(18px) saturate(1.18);
+  --si-shadow-main: 0 8px 40px #0002, 0 1.5px 0 #fff8 inset;
+  --si-shadow-accent: 0 12px 48px #fde04799, 0 1.5px 0 #fff8 inset;
+  --si-border-glass: 1.5px solid rgba(255,255,255,0.22);
+  --si-border-glass-dark: 1.5px solid rgba(24,26,59,0.22);
+  --si-radius-xl: 1.5rem;
+  --si-blue: #181a3b;
+  --si-yellow: #fde047;
+  --si-txt-main: #181a3b;
+  --si-txt-secondary: #23244a;
+}
+
+/* Supprime tout espace blanc en haut de la page Transactions */
+body, main, .transactions-bg {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.transactions-bg {
+  background: var(--si-bg-main);
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 1.2rem;
+  padding-right: 1.2rem;
+  overflow-x: hidden;
+}
+
+@media (max-width: 900px) {
+  .transactions-bg {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+@media (max-width: 600px) {
+  .transactions-bg {
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+}
+
+.card-glass {
+  background: rgba(255,255,255,0.80);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 40px #0001, 0 1.5px 0 #fff8 inset;
+  border: 2px solid rgba(255,255,255,0.22);
+  backdrop-filter: blur(20px) saturate(1.1);
+  padding: 2rem;
+  transition: box-shadow 0.22s, border 0.22s, transform 0.22s;
+}
+.card-glass.green {
+  border-color: #22c55e;
+}
+.card-glass.red {
+  border-color: #ef4444;
+}
+.card-glass.orange {
+  border-color: #f59e42;
+}
+.card-glass.blue {
+  border: 2px solid #60a5fa;
+  background: #fff;
+}
+.card-glass:hover {
+  box-shadow: 0 8px 40px #0002, 0 1.5px 0 #fff8 inset;
+  transform: translateY(-4px) scale(1.012);
+}
+.card-glass.green:hover {
+  border-color: #16a34a;
+  box-shadow: 0 8px 40px #22c55e44, 0 1.5px 0 #fff8 inset;
+}
+.card-glass.red:hover {
+  border-color: #dc2626;
+  box-shadow: 0 8px 40px #ef444444, 0 1.5px 0 #fff8 inset;
+}
+.card-glass.orange:hover {
+  border-color: #ea580c;
+  box-shadow: 0 8px 40px #f59e4244, 0 1.5px 0 #fff8 inset;
+}
+.card-glass.blue:hover {
+  box-shadow: 0 6px 32px 0 #60a5fa22, 0 1.5px 0 #2563eb;
+}
+
+.btn-glass {
+  background: var(--si-blue);
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px #0001;
+  border: none;
+  padding: 0.7rem 1.4rem;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.btn-glass:hover {
+  background: var(--si-yellow);
+  color: var(--si-blue);
+  box-shadow: 0 4px 18px #fde04799;
+  transform: translateY(-2px) scale(1.03);
+}
+
+.input-glass {
+  background: rgba(255,255,255,0.7);
+  border-radius: 0.8rem;
+  border: 1.5px solid #e0e7ef;
+  box-shadow: 0 1px 6px #60a5fa11;
+  padding: 0.7rem 1.1rem;
+  font-size: 1rem;
+  color: #1e293b;
+  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
+}
+.input-glass:focus, .input-glass:hover {
+  border: 1.5px solid #2563eb;
+  box-shadow: 0 0 0 2px #60a5fa33;
+  outline: none;
+  background: rgba(255,255,255,0.95);
+}
+
+.filter-bar-glass .input-glass::selection {
+  background: #e0e7ef;
+  color: #1e293b;
+}
+
+/* Correction pour Select (dropdown) hover/focus et sélection grise */
+.filter-bar-glass .input-glass, .filter-bar-glass .input-glass:focus, .filter-bar-glass .input-glass:hover {
+  background: rgba(255,255,255,0.7);
+}
+.filter-bar-glass .select-item[data-state="checked"],
+.filter-bar-glass .select-item[aria-selected="true"],
+.filter-bar-glass .select-item:active {
+  background: #e0e7ef !important;
+  color: #1e293b !important;
+}
+.filter-bar-glass .select-item:hover,
+.filter-bar-glass [role="option"]:hover {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+.filter-bar-glass .select__option--is-focused,
+.filter-bar-glass .select__option--is-selected:not(.select__option--is-disabled):hover {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+
+/* Ultra-spécifique : tous les états hover/focus/active/select d'un item de Select */
+.filter-bar-glass .select-item[data-state="active"],
+.filter-bar-glass .select-item[data-highlighted],
+.filter-bar-glass .select-item[aria-selected="true"]:not([data-disabled]),
+.filter-bar-glass .select-item:hover,
+.filter-bar-glass [role="option"]:hover,
+.filter-bar-glass [data-highlighted="true"],
+.filter-bar-glass [data-state="active"],
+.filter-bar-glass [data-selected="true"]:not([data-disabled]) {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+
+/* Dernier essai universel : cible tous les items hover, highlight, active, même dans le Shadow DOM */
+.filter-bar-glass *:hover,
+.filter-bar-glass *[data-highlighted="true"],
+.filter-bar-glass *[data-state="active"],
+.filter-bar-glass *[aria-selected="true"]:not([data-disabled]) {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+.filter-bar-glass :where(.select-item, [role="option"]):hover,
+.filter-bar-glass :where(.select-item, [role="option"])[data-highlighted],
+.filter-bar-glass :where(.select-item, [role="option"])[data-state="active"] {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+
+/* Suppression du contour jaune sur hover des combobox (select-item et select-trigger) */
+.filter-bar-glass .select-item:hover,
+.filter-bar-glass .select-item[data-highlighted],
+.filter-bar-glass [role="option"]:hover,
+.filter-bar-glass [data-highlighted="true"],
+.filter-bar-glass .select-trigger:hover,
+.filter-bar-glass .select-trigger:focus:not(:focus-visible) {
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+
+/* Ajout du contour jaune sur le hover des options de combobox (sélecteurs) pour cohérence avec le tableau */
+.filter-bar-glass .select-item[data-state="active"],
+.filter-bar-glass .select-item[data-highlighted],
+.filter-bar-glass .select-item[aria-selected="true"]:not([data-disabled]),
+.filter-bar-glass .select-item:hover,
+.filter-bar-glass [role="option"]:hover,
+.filter-bar-glass [data-highlighted="true"],
+.filter-bar-glass [data-state="active"],
+.filter-bar-glass *:hover,
+.filter-bar-glass *[data-highlighted="true"],
+.filter-bar-glass *[data-state="active"],
+.filter-bar-glass *[aria-selected="true"]:not([data-disabled]) {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+
+/* Contour jaune uniquement au hover, contour bleu uniquement au focus clavier (accessibilité) */
+.filter-bar-glass .select-item:focus-visible {
+  outline: 2px solid #2563eb !important; /* bleu focus clavier */
+  box-shadow: none !important;
+}
+.filter-bar-glass .select-item:hover,
+.filter-bar-glass .select-item[data-highlighted],
+.filter-bar-glass [role="option"]:hover,
+.filter-bar-glass [data-highlighted="true"] {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+  outline: none !important;
+}
+
+/* Correction : supprime le contour bleu natif au hover souris sur le bouton fermé du combobox, mais le garde au focus clavier uniquement */
+.filter-bar-glass .select-trigger:hover {
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+.filter-bar-glass .select-trigger:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.filter-bar-glass .select-trigger:focus-visible {
+  outline: 2px solid #2563eb !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Règle globale pour tous les items de menu déroulant dans l'app (portails inclus) */
+div[role="option"]:hover,
+div[role="option"][data-highlighted],
+div[role="option"][data-state="active"],
+div[role="option"][aria-selected="true"]:not([data-disabled]) {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--si-txt-main);
+  margin-bottom: 1.2rem;
+  letter-spacing: -1px;
+}
+
+.filter-bar-glass {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(9px);
+  border-radius: 1rem;
+  box-shadow: 0 2px 16px #60a5fa11;
+  padding: 1rem 1.5rem;
+  display: flex;
+  gap: 1rem 1.5rem;
+  align-items: center;
+  border: 1.5px solid #e0e7ef;
+  margin-bottom: 1.2rem;
+}
+@media (max-width: 700px) {
+  .filter-bar-glass {
+    margin-bottom: 0.5rem;
+    gap: 0.5rem 0.7rem;
+  }
+}
+
+.table-glass {
+  background: #fff;
+  border-radius: 1.2rem;
+  border: none;
+  box-shadow: 0 2px 24px #181C3A11;
+  backdrop-filter: blur(4px);
+  overflow-x: auto;
+  transition: box-shadow 0.22s, transform 0.22s, filter 0.22s;
+  animation: fadeInUp 0.5s cubic-bezier(.4,1.4,.7,1) 0.1s both;
+  margin: 0;
+  padding: 0.5rem 0 1.2rem 0;
+}
+.table-glass th, .table-glass td {
+  padding: 1rem 1.2rem;
+  font-size: 1.08rem;
+  color: #181C3A;
+  background: transparent;
+}
+.table-glass th {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-bottom: 1.5px solid #fde04744;
+  background: transparent;
+}
+.table-glass tr {
+  transition: background 0.16s;
+}
+.table-glass thead tr:hover,
+.table-glass thead tr:hover th {
+  background: inherit !important;
+  color: inherit !important;
+  cursor: default;
+}
+.table-glass tbody tr:hover {
+  background: #e7f0fd !important;
+  color: #2563eb !important;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  box-shadow: none;
+  z-index: 2;
+  position: relative;
+}
+.table-glass tbody tr:hover th,
+.table-glass tbody tr:hover td {
+  color: #2563eb !important;
+  border-top: none;
+  border-bottom: none;
+}
+.table-glass td .icon-action {
+  transition: transform 0.18s, filter 0.18s;
+  cursor: pointer;
+}
+.table-glass td .icon-action:hover {
+  filter: brightness(1.5) drop-shadow(0 2px 4px #fde04777);
+  transform: scale(1.18) rotate(-6deg);
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Animation de rotation continue pour l'icône reset quand un filtre est actif */
+.reset-rotate-anim {
+  animation: rotate-ccw 1.1s linear infinite;
+}
+@keyframes rotate-ccw {
+  100% { transform: rotate(-360deg); }
+}
+
+/* Animation pulse pour l'icône reset quand un filtre est actif */
+.reset-pulse-anim {
+  animation: pulse 1.1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.13); }
+}
+
+.reset-filters-btn {
+  box-shadow: 0 2px 8px #60a5fa11;
+}
+.reset-filters-btn:focus-visible {
+  outline: 2px solid #2563eb;
+}
+
+/* Remplissage jaune animé de gauche à droite sur le bouton "Ajouter une transaction" */
+.btn-animated-yellow {
+  position: relative;
+  overflow: hidden;
+}
+.btn-animated-yellow-bg {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #fde047 60%, #fffbe7 100%);
+  z-index: 1;
+  transition: width 0.85s cubic-bezier(.5,1.6,.4,1), opacity 0.2s;
+  opacity: 0.92;
+}
+.btn-animated-yellow:hover .btn-animated-yellow-bg,
+.btn-animated-yellow:focus-visible .btn-animated-yellow-bg {
+  width: 100%;
+}
+.btn-animated-yellow .relative {
+  position: relative;
+  z-index: 2;
+  transition: color 0.19s;
+}
+.btn-animated-yellow:hover .relative,
+.btn-animated-yellow:focus-visible .relative {
+  color: #181a3b;
+}
+/* Animation "danse" de l'icône au hover : en boucle */
+.btn-animated-yellow:hover .btn-add-icon,
+.btn-animated-yellow:focus-visible .btn-add-icon {
+  animation: icon-dance 0.6s cubic-bezier(.7,0,.3,1) infinite;
+}
+@keyframes icon-dance {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-20deg) scale(1.1); }
+  40% { transform: rotate(18deg) scale(1.13); }
+  60% { transform: rotate(-12deg) scale(1.1); }
+  80% { transform: rotate(8deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+/* Effet de remplissage gris clair pour bouton Annuler */
+.btn-animated-grey {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  color: #23244a;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px #0001;
+  border: none;
+  padding: 0.7rem 1.4rem;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+.btn-animated-grey-bg {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #e5e7eb 60%, #f3f4f6 100%);
+  z-index: 1;
+  transition: width 0.85s cubic-bezier(.5,1.6,.4,1), opacity 0.2s;
+  opacity: 0.92;
+}
+.btn-animated-grey:hover .btn-animated-grey-bg,
+.btn-animated-grey:focus-visible .btn-animated-grey-bg {
+  width: 100%;
+}
+.btn-animated-grey .relative {
+  position: relative;
+  z-index: 2;
+  transition: color 0.19s;
+}
+.btn-animated-grey:hover .relative,
+.btn-animated-grey:focus-visible .relative {
+  color: #181a3b;
+}
+
+/* Style spécial pour le bouton Annuler blanc/bleu sans animation de fond */
+.btn-cancel-white-blue {
+  background: #fff !important;
+  color: var(--si-blue) !important;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px #0001;
+  border: none;
+  padding: 0.7rem 1.4rem;
+  transition: color 0.18s, background 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+.btn-cancel-white-blue:hover, .btn-cancel-white-blue:focus-visible {
+  background: #fff !important;
+  color: var(--si-blue) !important;
+  box-shadow: 0 2px 18px #2563eb22;
+}
+.btn-cancel-white-blue .relative {
+  position: relative;
+  z-index: 2;
+}
+
+/* Animation pulse pour l'icône Annuler sur hover du bouton */
+@keyframes pulse-anim {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.18); opacity: 0.7; }
+  60% { transform: scale(0.95); opacity: 0.9; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.group:hover .group-hover\:pulse-anim {
+  animation: pulse-anim 0.8s cubic-bezier(.5,1.6,.4,1) infinite;
+}
+
+/* Style moderne pour le header et le titre de page */
+.page-header-glass {
+  margin-top: 1.2rem;
+  margin-bottom: 1.5rem;
+  padding-left: 0.2rem;
+  padding-right: 4.6rem; /* Laisse la place pour la pastille logo à droite */
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2rem;
+}
+@media (max-width: 700px) {
+  .page-header-glass {
+    margin-bottom: 0.7rem;
+    margin-top: 0.5rem;
+    gap: 0.5rem;
+  }
+}
+
+.page-title-glass {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: #181a3b;
+  line-height: 1.06;
+  position: relative;
+  text-shadow: 0 2px 24px #60a5fa22, 0 1px 0 #fff8;
+  padding-bottom: 0.13em;
+}
+.page-title-glass::after {
+  content: '';
+  display: block;
+  width: 3.1em;
+  height: 10px;
+  margin-top: 0.09em;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #fde047 0%, #ffd600 20%, #2563eb 70%, #7c3aed 100%);
+  opacity: 0.65;
+  position: absolute;
+  left: 0; bottom: -0.14em;
+  pointer-events: none;
+  background-size: 200% 100%;
+  background-position: 0% 0%;
+  animation: title-underline-gradient-move 3.2s ease-in-out infinite alternate;
+  box-shadow: 0 2px 16px 0 #fde04755, 0 0px 24px 0 #2563eb33;
+  overflow: hidden;
+}
+.page-title-glass::before {
+  content: '';
+  display: block;
+  width: 3.1em;
+  height: 10px;
+  position: absolute;
+  left: 0; bottom: -0.14em;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0.0;
+  background: linear-gradient(90deg, transparent 0%, #fff 45%, #fff 55%, transparent 100%);
+  animation: title-underline-scan 4.2s cubic-bezier(.7,0,.3,1) infinite;
+}
+@keyframes title-underline-gradient-move {
+  0% { background-position: 0% 0%; opacity: 0.65; }
+  45% { opacity: 0.85; }
+  50% { background-position: 100% 0%; opacity: 0.85; }
+  100% { background-position: 0% 0%; opacity: 0.65; }
+}
+@keyframes title-underline-scan {
+  0%, 92% { opacity: 0; left: 0; }
+  94% { opacity: 0.65; left: 0; }
+  98% { opacity: 0.85; left: 1.8em; }
+  100% { opacity: 0; left: 3.1em; }
+}
+
+/* Responsive tweaks */
+@media (max-width: 700px) {
+  .card-glass, .filter-bar-glass, .table-glass {
+    padding: 1rem !important;
+    border-radius: 0.8rem;
+  }
+  .section-title {
+    font-size: 1.3rem;
+  }
+}
+
+.grid {
+  gap: 1.2rem;
+}
+@media (max-width: 700px) {
+  .grid {
+    gap: 0.7rem;
+  }
+}
+
+.logo-pastille {
+  right: 3.2rem;
+  top: 1.1rem;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  max-height: 48px;
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #181C3A; /* même bleu que le menu principal */
+  border: 2.5px solid #fde047;
+  border-radius: 50%;
+  box-shadow: 0 2px 12px #181C3A22;
+  transition: box-shadow 0.18s, transform 0.18s, filter 0.18s;
+  z-index: 50;
+  cursor: pointer;
+}
+.logo-pastille:hover, .logo-pastille:focus-visible {
+  box-shadow: 0 4px 24px #181C3A55, 0 0 0 4px #fde04755;
+  filter: brightness(1.07) saturate(1.15);
+  transform: scale(1.08) translateY(-2px);
+  border-color: #fde047;
+}
+@media (max-width: 900px) {
+  .logo-pastille {
+    right: 1.6rem;
+    top: 0.7rem;
+  }
+}
+@media (max-width: 600px) {
+  .logo-pastille {
+    right: 0.7rem;
+    top: 0.3rem;
+    width: 38px; height: 38px;
+    max-width: 38px; max-height: 38px;
+  }
+}
+.logo-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%; width: 100%;
+}
+.logo-icon {
+  object-fit: contain;
+  color: #181a3b;
+  filter: drop-shadow(0 1px 7px #fffbe7cc);
+  transition: transform 0.22s cubic-bezier(.7,0,.3,1), filter 0.22s;
+}
+.logo-pastille:hover .logo-icon,
+.logo-pastille:focus-visible .logo-icon {
+  transform: scale(1.16) rotate(8deg);
+  filter: drop-shadow(0 2px 13px #fffbe7);
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+.input-search-icon {
+  position: absolute;
+  left: 1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.7em;
+  width: 1.7em;
+  pointer-events: none;
+  z-index: 2;
+}
+.input-search {
+  padding-left: 2.8em !important;
+}

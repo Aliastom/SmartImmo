@@ -2,7 +2,7 @@
 
 import { Toaster } from "@/components/ui/toaster"
 import { Navbar } from '@/components/navigation/navbar'
-import { Sidebar } from '@/components/layout/sidebar'
+import { FloatingMenu } from '@/components/FloatingMenu'
 import { useState, useEffect } from 'react'
 import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -58,11 +58,11 @@ export default function ClientLayout({
   return (
     <SessionContextProvider supabaseClient={supabase}>
       <div className="flex flex-col md:flex-row h-screen">
-        <Sidebar />
+        <FloatingMenu />
         <div className="flex-1 flex flex-col w-full">
           {/* SUPPRESSION DU NAVBAR GLOBAL */}
           {/* {!isMobile && <Navbar />} */}
-          <main className={`flex-1 overflow-y-auto p-2 md:p-4 ${isMobile ? 'mt-12' : ''}`}>
+          <main className={`flex-1 overflow-y-auto p-2 md:p-4 pt-14 md:pt-14 ${isMobile ? 'mt-12' : ''}`}>
             {children}
           </main>
         </div>

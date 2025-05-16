@@ -1,5 +1,0 @@
-import { ClientPage } from './client-page.tsxremove'
-
-export default function PropertyDetailPage({ params }: { params: { id: string } }) {
-  return <ClientPage id={params.id} />
-}

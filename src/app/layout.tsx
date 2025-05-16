@@ -1,8 +1,9 @@
 import { Inter } from 'next/font/google'
 import './globals.css'
-import ClientLayout from './client-layout.tsx'
+import ClientLayout from './client-layout'
 import Script from 'next/script';
 import GlobalLoader from "@/components/ui/global-loader";
+import Link from 'next/link';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,6 +32,11 @@ export default function RootLayout({
           {/* <DevWatermarkRemover /> */}
           {children}
         </ClientLayout>
+        <Link href="/dashboard" className="logo-pastille group" aria-label="Accueil SmartImmo">
+          <span className="logo-inner">
+            <img src="/images/logo.png" alt="SmartImmo logo" className="logo-icon" width={32} height={32} />
+          </span>
+        </Link>
       </body>
     </html>
   )

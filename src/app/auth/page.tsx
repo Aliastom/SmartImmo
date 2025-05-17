@@ -7,8 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion';
 
-import { Suspense } from "react";
-
 export default function AuthPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -57,7 +55,6 @@ export default function AuthPage() {
   }
 
   return (
-  <Suspense fallback={<div>Chargement...</div>}>
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-white to-pink-100">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -87,6 +84,5 @@ export default function AuthPage() {
         <div className="mt-8 text-center text-xs text-gray-400">Connexion sécurisée via Google OAuth</div>
       </motion.div>
     </div>
-  </Suspense>
-)
+  )
 }

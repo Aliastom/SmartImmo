@@ -26,11 +26,6 @@ const user = {
 };
 
 export const FloatingMenu: React.FC = () => {
-  const [open, setOpen] = useState(false);
-  const [showMenuAnim, setShowMenuAnim] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [circleAnim, setCircleAnim] = useState(false);
-  const [closing, setClosing] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState(false);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [ripple, setRipple] = useState<{ idx: number, x: number, y: number, key: number, close: () => void } | null>(null);
@@ -39,10 +34,6 @@ export const FloatingMenu: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
   const activeIdx = navItems.findIndex(item => pathname.startsWith(item.href));
-
-  useEffect(() => {
-    if (open) setShowMenuAnim(false);
-  }, [open]);
 
   useEffect(() => {
     if (!avatarMenu) return;
@@ -55,55 +46,107 @@ export const FloatingMenu: React.FC = () => {
     return () => window.removeEventListener('mousedown', handleClick);
   }, [avatarMenu]);
 
-  const handleOpenMenu = () => {
-    setCircleAnim(true);
-    setTimeout(() => {
-      setCircleAnim(false);
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setShowMenuAnim(true);
-        setTimeout(() => setOpen(true), 180);
-      }, 320); // temps du loader
-    }, 220); // temps de l'expansion
-  };
-
-  const handleCloseMenu = () => {
-    setClosing(true);
-    setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
-    }, 340); // durée de l'animation de fermeture
-  };
-
+  // Menu toujours visible
   return (
-    <>
-      {/* Overlay fondu */}
-      <AnimatePresence>
-        {(open || closing) && (
-          <motion.div
-            key="overlay"
-            className="fixed inset-0 bg-black/30 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            onClick={handleCloseMenu}
-          />
-        )}
-      </AnimatePresence>
-      {/* Zone sensible à gauche */}
-      {!open && (
-        <div
-          style={{position:'fixed',left:0,top:0,width:24,height:'100vh',zIndex:9999}}
-          onMouseEnter={handleOpenMenu}
-        />
-      )}
-      {/* SUPPRIMÉ : pas d'animation intermédiaire ni bouton flottant avant ouverture du menu */}
-      {/* Menu flottant slide depuis la gauche avec fermeture animée */}
-      <AnimatePresence>
-        {(open || closing) && (
-          <motion.div
+    <div style={{position:'fixed',left:0,top:0,height:'100vh',zIndex:9999,display:'flex',alignItems:'flex-start'}}>
+      <motion.div
+        key="floating-menu"
+        initial={{ x: 0, opacity: 1 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: -80, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        className="bg-white/95 shadow-2xl border-r border-gray-200 flex flex-col justify-between h-full py-8 px-3 w-[260px] z-50"
+        style={{ minWidth: 220 }}
+      >
+        <nav className="flex flex-col gap-1">
+          {navItems.map((item, idx) => (
+            <Link key={item.href} href={item.href} legacyBehavior passHref>
+              <motion.div
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                style={idx === activeIdx ? {
+                  background: '#fde047',
+                  borderRadius: 20,
+                  fontWeight: 700,
+                  boxShadow: '0 2px 8px 0 #fde04733',
+                  border: '1.5px solid #fde047',
+                  color: '#181a3b',
+                } : {}}
+                transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                className={`group flex items-center justify-between px-6 py-4 font-medium text-gray-800 ${idx === activeIdx ? 'bg-yellow-200/80 rounded-2xl font-bold shadow border border-yellow-300 scale-[1.03] ring-2 ring-yellow-300/40' : ''}`}
+                style={{ minHeight: 56, cursor: 'pointer', transition: 'background 0.18s, box-shadow 0.18s, color 0.18s', position: 'relative', overflow: 'hidden' }}
+                tabIndex={0}
+                role="link"
+                onClick={e => {
+                  e.preventDefault();
+                  setRipple({
+                    idx,
+                    x: 24,
+                    y: 24,
+                    key: Date.now() + Math.random(),
+                    close: () => {
+                      setTimeout(() => router.push(item.href), 10);
+                    }
+                  });
+                }}
+              >
+                {/* Ripple effect */}
+                {ripple && ripple.idx === idx && (
+                  <motion.span
+                    key={ripple.key}
+                    initial={{ scale: 0, opacity: 0.55 }}
+                    animate={{ scale: 7.5, opacity: 0 }}
+                    transition={{ duration: 0.48, ease: 'easeOut' }}
+                    style={{ position: 'absolute', left: ripple.x, top: ripple.y, width: 32, height: 32, borderRadius: 9999, background: '#fde047', zIndex: 1 }}
+                    onAnimationComplete={() => {
+                      setRipple(null);
+                      ripple && ripple.close && ripple.close();
+                    }}
+                  />
+                )}
+                <span className="flex items-center gap-3">
+                  <motion.span
+                    animate={
+                      hoveredIdx === idx
+                        ? {
+                            scale: [1, 1.18, 1.12, 1.18, 1],
+                            rotate: [0, -10, 10, -10, 0],
+                            y: [0, -4, 4, -2, 0],
+                          }
+                        : { scale: 1, rotate: 0, y: 0 }
+                    }
+                    transition={
+                      hoveredIdx === idx
+                        ? {
+                            duration: 0.55,
+                            times: [0, 0.25, 0.5, 0.75, 1],
+                            type: 'tween',
+                            ease: 'easeInOut',
+                            repeat: Infinity,
+                          }
+                        : { duration: 0.22, type: 'tween', ease: 'easeInOut' }
+                    }
+                    style={{ display: 'inline-flex' }}
+                  >
+                    {item.icon}
+                  </motion.span>
+                  <span className="ml-1 text-base">{item.label}</span>
+                </span>
+                <motion.span
+                  initial={false}
+                  animate={idx === activeIdx ? { rotate: 90, opacity: 1 } : { rotate: 0, opacity: 0.45 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  className="mr-2"
+                >
+                  <ChevronRight size={20} />
+                </motion.span>
+              </motion.div>
+            </Link>
+          ))}
+        </nav>
+      </motion.div>
+    </div>
+  );
             key="floating-menu"
             className="fixed top-0 left-0 z-50 h-full w-[92vw] max-w-md rounded-r-3xl bg-white/60 shadow-2xl border-r border-gray-200 flex flex-col overflow-hidden backdrop-blur-xl border-white/30"
             style={{

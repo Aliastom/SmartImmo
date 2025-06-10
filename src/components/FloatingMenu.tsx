@@ -20,12 +20,10 @@ const navItems = [
   { label: 'Admin', icon: <Settings size={22} />, href: '/admin' },
 ];
 
-const user = {
-  name: 'Thomas',
-  avatar: 'https://ui-avatars.com/api/?name=Thomas&background=181a3b&color=fff&size=64',
-};
+import { useAuth } from '@/lib/context/auth-context';
 
 export const FloatingMenu: React.FC = () => {
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [showMenuAnim, setShowMenuAnim] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -130,8 +128,8 @@ export const FloatingMenu: React.FC = () => {
                 aria-label="Profil utilisateur"
               >
                 <img
-                  src={user.avatar}
-                  alt={user.name}
+                  src={user?.user_metadata?.avatar_url || user?.avatar_url || '/images/avatar-default.png'}
+                  alt={user?.user_metadata?.full_name || user?.email || 'Utilisateur'}
                   className="w-9 h-9 rounded-full object-cover bg-white/20"
                 />
               </motion.button>
@@ -269,6 +267,17 @@ export const FloatingMenu: React.FC = () => {
                 </Link>
               ))}
             </nav>
+            {/* Bouton Déconnexion en bas si connecté */}
+            {user && user.email && (
+              <div className="mt-auto px-6 pb-7 pt-2 flex flex-col">
+                <button
+                  className="w-full py-3 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-[#181a3b] font-bold text-base shadow transition mt-2"
+                  onClick={async () => { await signOut(); }}
+                >
+                  Déconnexion
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

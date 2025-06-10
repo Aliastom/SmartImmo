@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/types/database'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -45,42 +45,78 @@ const DocumentUploadModal = ({
   const { toast } = useToast()
   const supabase = createClientComponentClient<Database>()
 
-  // Types de documents
-  const documentTypes = [
-    { id: 'document', name: 'Document' },
-    { id: 'contract', name: 'Contrat' },
-    { id: 'invoice', name: 'Facture' },
-    { id: 'image', name: 'Image' },
-    { id: 'pdf', name: 'PDF' },
-    { id: 'spreadsheet', name: 'Tableur' },
-    { id: 'other', name: 'Autre' }
-  ]
+ 
 
-  // Catégories de documents
-  const documentCategories = [
-    { id: 'property', name: 'Propriété', types: ['acte_propriete', 'photos', 'plans', 'diagnostics'] },
-    { id: 'fiscal', name: 'Fiscalité', types: ['taxe_fonciere', 'taxe_habitation', 'avis_imposition'] },
-    { id: 'insurance', name: 'Assurances', types: ['assurance_habitation', 'assurance_pno', 'garantie_loyers'] },
-    { id: 'rental', name: 'Location', types: ['bail', 'etat_lieux', 'quittances', 'correspondance'] },
-    { id: 'financial', name: 'Financier', types: ['contrat_pret', 'echeancier', 'amortissement'] },
-    { id: 'management', name: 'Gestion', types: ['contrat_gestion', 'rapports', 'factures'] }
-  ]
 
-  // Sous-types de documents en fonction de la catégorie
-  const getDocumentSubtypes = () => {
-    const category = documentCategories.find(cat => cat.id === documentCategory)
-    if (!category) return []
-    
-    return category.types.map(type => ({
-      id: type,
-      name: type
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
-    }))
-  }
 
-  const documentSubtypes = getDocumentSubtypes()
+
+
+
+
+// Catégories et types dynamiques depuis la base
+const [categories, setCategories] = useState<any[]>([]);
+const [types, setTypes] = useState<any[]>([]);
+
+// Chargement dynamique des catégories et types à l'ouverture de la modale
+useEffect(() => {
+  if (!isOpen) return;
+  const fetchCategoriesAndTypes = async () => {
+    const supabase = createClientComponentClient<Database>();
+    const { data: catData } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('active', true)
+      .eq('visible', true);
+    setCategories(catData || []);
+    // Charger les types pour la première catégorie par défaut
+    if (catData && catData.length > 0) {
+      const firstCategoryId = catData[0].id;
+      const { data: typeData } = await supabase
+        .from('types')
+        .select('*')
+        .eq('active', true)
+        .eq('visible', true)
+        .eq('category_id', firstCategoryId);
+      setTypes(typeData || []);
+    } else {
+      setTypes([]);
+    }
+  };
+  fetchCategoriesAndTypes();
+}, [isOpen]);
+
+// Met à jour les types lorsqu'on change de catégorie
+useEffect(() => {
+  if (!documentCategory) return;
+  const fetchTypesForCategory = async () => {
+    const supabase = createClientComponentClient<Database>();
+    const { data: typeData } = await supabase
+      .from('types')
+      .select('*')
+      .eq('active', true)
+      .eq('visible', true)
+      .eq('category_id', documentCategory);
+    setTypes(typeData || []);
+    // Si le type sélectionné n'existe plus, reset
+    if (typeData && !typeData.some((t: any) => t.id === documentType)) {
+      setDocumentType(typeData[0]?.id || '');
+    }
+  };
+  fetchTypesForCategory();
+}, [documentCategory]);
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
@@ -229,33 +265,17 @@ const DocumentUploadModal = ({
             <div>
               <Label htmlFor="category" className="text-sm font-medium">Catégorie</Label>
               <select
-                id="category"
-                value={documentCategory}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === 'property') {
-                    setDocumentType('acte_propriete')
-                  } else if (value === 'fiscal') {
-                    setDocumentType('taxe_fonciere')
-                  } else if (value === 'insurance') {
-                    setDocumentType('assurance_habitation')
-                  } else if (value === 'rental') {
-                    setDocumentType('bail')
-                  } else if (value === 'financial') {
-                    setDocumentType('contrat_pret')
-                  } else if (value === 'management') {
-                    setDocumentType('contrat_gestion')
-                  }
-                  setDocumentCategory(value)
-                }}
-                disabled={isLoading}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
-              >
-                {documentCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
+               id="category"
+               value={documentCategory}
+               onChange={e => setDocumentCategory(e.target.value)}
+               disabled={isLoading}
+               className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
+             >
+               {categories.map((category: any) => (
+                 <option key={category.id} value={category.id}>
+                   {category.name}
+                 </option>
+               ))}
               </select>
             </div>
             
@@ -264,26 +284,15 @@ const DocumentUploadModal = ({
               <select
                 id="type"
                 value={documentType}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setDocumentType(value)
-                }}
+                onChange={e => setDocumentType(e.target.value)}
                 disabled={isLoading}
                 className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
               >
-                {documentSubtypes.length > 0 ? (
-                  documentSubtypes.map((subtype) => (
-                    <option key={subtype.id} value={subtype.id}>
-                      {subtype.name}
-                    </option>
-                  ))
-                ) : (
-                  documentTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))
-                )}
+                {types.map((type: any) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

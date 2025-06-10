@@ -137,15 +137,39 @@ export default function AdminPage() {
     setLoading(true);
     if (modalMode === 'category') {
       if (form.id) {
-        await supabase.from('categories').update({ name: form.name, visible: form.visible }).eq('id', form.id);
+        await supabase.from('categories').update({
+          name: form.name,
+          visible: form.visible,
+          scope: form.scope,
+          active: form.active
+        }).eq('id', form.id);
       } else {
-        await supabase.from('categories').insert({ name: form.name, visible: form.visible });
+        await supabase.from('categories').insert({
+          name: form.name,
+          visible: form.visible,
+          scope: form.scope,
+          active: form.active
+        });
       }
     } else {
       if (form.id) {
-        await supabase.from('types').update({ name: form.name, category_id: form.category_id, visible: form.visible }).eq('id', form.id);
+        await supabase.from('types').update({
+          name: form.name,
+          category_id: form.category_id,
+          visible: form.visible,
+          scope: form.scope,
+          active: form.active,
+          deductible: form.deductible
+        }).eq('id', form.id);
       } else {
-        await supabase.from('types').insert({ name: form.name, category_id: form.category_id, visible: form.visible });
+        await supabase.from('types').insert({
+          name: form.name,
+          category_id: form.category_id,
+          visible: form.visible,
+          scope: form.scope,
+          active: form.active,
+          deductible: form.deductible
+        });
       }
     }
     setModalOpen(false);

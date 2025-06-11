@@ -128,7 +128,7 @@ export const FloatingMenu: React.FC = () => {
                 aria-label="Profil utilisateur"
               >
                 <img
-                  src={user?.user_metadata?.avatar_url || '/images/avatar-default.png'}
+                  src={user?.user_metadata?.avatar_url || '/images/logo.png'}
                   alt={user?.user_metadata?.full_name || user?.email || 'Utilisateur'}
                   className="w-9 h-9 rounded-full object-cover bg-white/20"
                 />

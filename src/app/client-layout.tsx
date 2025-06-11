@@ -1,7 +1,7 @@
 'use client'
 
 import { Toaster } from "@/components/ui/toaster"
-import { Navbar } from '@/components/navigation/navbar'
+
 import { FloatingMenu } from '@/components/FloatingMenu'
 import { useState, useEffect } from 'react'
 import { SessionContextProvider } from '@supabase/auth-helpers-react';

@@ -16,7 +16,7 @@ const navItems = [
   { label: 'Documents', icon: <FileText size={22} />, href: '/documents' },
   { label: 'Régimes fiscaux', icon: <Settings size={22} />, href: '/regimes' },
   { label: 'Impôts', icon: <BarChart2 size={22} />, href: '/impots-premium' },
-  { label: 'Profil', icon: <Users size={22} />, href: '/profiles' },
+  { label: 'Profil', icon: <Users size={22} />, href: '/profile' },
   { label: 'Admin', icon: <Settings size={22} />, href: '/admin' },
 ];
 

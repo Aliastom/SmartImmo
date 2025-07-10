@@ -23,8 +23,14 @@ interface DocumentListProps {
 type Document = {
   id: string
   name: string
-  type: string
-  category: string
+  type?: {
+    id: string
+    name: string
+    category?: {
+      id: string
+      name: string
+    }
+  }
   file_path: string
   file_size: number
   mime_type: string
@@ -45,15 +51,6 @@ export function DocumentList({ view, propertyId, category, searchQuery = '', ref
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const { toast } = useToast()
   const supabase = createClientComponentClient<Database>()
-
-  const categoryLabels: Record<string, string> = {
-    'property': 'Propriété',
-    'fiscal': 'Fiscalité',
-    'insurance': 'Assurances',
-    'rental': 'Location',
-    'financial': 'Financier',
-    'management': 'Gestion'
-  }
 
   const typeIcons: Record<string, string> = {
     'pdf': '📄',
@@ -87,6 +84,14 @@ export function DocumentList({ view, propertyId, category, searchQuery = '', ref
             property:property_id (
               id,
               name
+            ),
+            type:type_id (
+              id,
+              name,
+              category:category_id (
+                id,
+                name
+              )
             )
           `)
           .eq('user_id', session.user.id)
@@ -288,7 +293,7 @@ export function DocumentList({ view, propertyId, category, searchQuery = '', ref
                         </p>
                         <div className="mt-2">
                           <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                            {categoryLabels[document.category] || document.category}
+                            {document.type?.category?.name || 'Autre'}
                           </span>
                         </div>
                         {document.property && (
@@ -370,7 +375,7 @@ export function DocumentList({ view, propertyId, category, searchQuery = '', ref
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                      {categoryLabels[document.category] || document.category}
+                      {document.type?.category?.name || 'Autre'}
                     </span>
                   </TableCell>
                   <TableCell>

@@ -530,8 +530,7 @@ export default function TransactionModal({ isOpen, onClose, transactionId, trans
                 file_path: filePath,
                 file_size: file.size,
                 mime_type: file.type,
-                type: 'attachment',
-                category: 'transaction',
+                type_id: formData.type,
                 metadata: { original_filename: file.name }
               })
               .select()

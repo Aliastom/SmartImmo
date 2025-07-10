@@ -116,8 +116,8 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
           attachments_count:transaction_documents(count)
         `)
         .eq('user_id', session.user.id)
-        .order('date', { ascending: false })
-
+        .order('accounting_month', { ascending: false })
+        
       if (filterType !== 'all') {
         query = query.eq('type', filterType)
       }
@@ -160,6 +160,13 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
       } else {
         filteredTransactions = data || [];
       }
+      // Tri de sécurité pour garantir l’ordre backend (accounting_month DESC, date DESC) même après filtrage JS
+      filteredTransactions.sort((a, b) => {
+        if (a.accounting_month !== b.accounting_month) {
+          return b.accounting_month.localeCompare(a.accounting_month);
+        }
+        return b.date.localeCompare(a.date);
+      });
       setTransactions(filteredTransactions);
     } catch (error: any) {
       console.error('Error:', error)

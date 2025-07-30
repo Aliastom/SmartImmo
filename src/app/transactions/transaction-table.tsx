@@ -21,6 +21,8 @@ interface TransactionTableProps {
   filterCategory: string
   filterProperty: string
   filterMonth: string
+  filterAccountingMonths: string[]
+  filterTransactionKind: string // 'all' | 'income' | 'expense'
   onEdit: (id: string) => void
   onDuplicate: (transaction: Transaction) => void
   refreshTrigger: number
@@ -42,9 +44,10 @@ interface Transaction {
   attachments_count: { count: number }[]
   transaction_type: string
   created_at?: string
+  type_data?: { name: string } // <-- ajout ici
 }
 
-export function TransactionTable({ searchQuery, filterType, filterCategory, filterProperty, filterMonth, onEdit, onDuplicate, refreshTrigger, onTransactionsLoaded }: TransactionTableProps) {
+export function TransactionTable({ searchQuery, filterType, filterCategory, filterProperty, filterMonth, filterAccountingMonths, filterTransactionKind, onEdit, onDuplicate, refreshTrigger, onTransactionsLoaded }: TransactionTableProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -113,6 +116,7 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
         .select(`
           *,
           property:properties(name),
+          type_data:types(name),
           attachments_count:transaction_documents(count)
         `)
         .eq('user_id', session.user.id)
@@ -127,8 +131,11 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
       if (filterProperty !== 'all') {
         query = query.eq('property_id', filterProperty)
       }
-      if (filterMonth && filterMonth !== 'all') {
-        // Si filterMonth est une année (ex: '2024'), on filtre par année
+      // Si un ou plusieurs mois comptables sont sélectionnés, ils sont prioritaires
+      if (filterAccountingMonths && filterAccountingMonths.length > 0) {
+        query = query.in('accounting_month', filterAccountingMonths)
+      } else if (filterMonth && filterMonth !== 'all') {
+        // Sinon, filtrer par année
         if (/^\d{4}$/.test(filterMonth)) {
           query = query.ilike('accounting_month', `${filterMonth}-%`)
         } else {
@@ -139,7 +146,7 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
       let filteredTransactions: Transaction[] = [];
       const { data, error } = await query;
       if (error) throw error;
-      if (safeQuery.length > 0) {
+      if (searchQuery.trim() !== "") {
         filteredTransactions = (data || []).filter(tx => {
           const descMatch = tx.description?.toLowerCase().includes(safeQuery);
           const propMatch = tx.property?.name?.toLowerCase().includes(safeQuery);
@@ -159,6 +166,10 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
         });
       } else {
         filteredTransactions = data || [];
+      }
+      // Filtre JS sur le type de transaction (revenu/dépense)
+      if (filterTransactionKind !== 'all') {
+        filteredTransactions = filteredTransactions.filter(tx => tx.transaction_type === filterTransactionKind);
       }
       // Tri de sécurité pour garantir l’ordre backend (accounting_month DESC, date DESC) même après filtrage JS
       filteredTransactions.sort((a, b) => {
@@ -252,8 +263,8 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
   }
   
   useEffect(() => {
-    loadTransactions()
-  }, [refreshTrigger, filterType, filterCategory, filterProperty, filterMonth, searchQuery])
+    loadTransactions();
+  }, [searchQuery, filterType, filterCategory, filterProperty, filterMonth, filterAccountingMonths, filterTransactionKind, refreshTrigger]);
 
   useEffect(() => {
     if (onTransactionsLoaded) {
@@ -279,13 +290,39 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
     return types.find(t => t.id === typeId)?.name || typeId;
   }
 
-  // Classement par date d'ajout DESC (plus récent en haut), stricte sur created_at si dispo
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    if (a.created_at && b.created_at) {
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  // Tri interactif global
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'accounting_month', direction: 'desc' });
+  
+  function handleSort(column: string) {
+    setSortConfig((prev) => {
+      if (prev.key === column) {
+        return { key: column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key: column, direction: 'asc' };
+    });
+  }
+  
+  function compareTransactions(a: Transaction, b: Transaction, key: string, direction: 'asc' | 'desc') {
+    let res = 0;
+    if (key === 'accounting_month') {
+      res = a.accounting_month.localeCompare(b.accounting_month);
+    } else if (key === 'date') {
+      res = a.date.localeCompare(b.date);
+    } else if (key === 'amount') {
+      res = Number(a.amount) - Number(b.amount);
+    } else if (key === 'category') {
+      res = getCategoryLabelById(a.category).localeCompare(getCategoryLabelById(b.category));
+    } else if (key === 'type') {
+      res = getTypeLabelById(a.type).localeCompare(getTypeLabelById(b.type));
+    } else if (key === 'property') {
+      res = (a.property?.name || '').localeCompare(b.property?.name || '');
+    } else {
+      res = String((a as any)[key] ?? '').localeCompare(String((b as any)[key] ?? ''));
     }
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+    return direction === 'asc' ? res : -res;
+  }
+  
+  const sortedTransactions = [...transactions].sort((a, b) => compareTransactions(a, b, sortConfig.key, sortConfig.direction));
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -387,12 +424,12 @@ export function TransactionTable({ searchQuery, filterType, filterCategory, filt
       <Table className="table-glass">
         <TableHeader>
           <TableRow>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Date</TableHead>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Catégorie</TableHead>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Type</TableHead>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Bien</TableHead>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase">Mois comptable</TableHead>
-            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">Montant</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase cursor-pointer select-none" onClick={() => handleSort('date')}>Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase cursor-pointer select-none" onClick={() => handleSort('category')}>Catégorie {sortConfig.key === 'category' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase cursor-pointer select-none" onClick={() => handleSort('type')}>Type {sortConfig.key === 'type' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase cursor-pointer select-none" onClick={() => handleSort('property')}>Bien {sortConfig.key === 'property' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase cursor-pointer select-none" onClick={() => handleSort('accounting_month')}>Mois comptable {sortConfig.key === 'accounting_month' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
+            <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right cursor-pointer select-none" onClick={() => handleSort('amount')}>Montant {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">Pièces jointes</TableHead>
             <TableHead className="p-3 text-sm font-medium text-gray-500 uppercase text-right">
               <div className="flex items-center space-x-2 justify-end">

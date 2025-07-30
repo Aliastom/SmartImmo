@@ -87,7 +87,7 @@ export function ClientPage() {
       // Récupérer les biens
       const { data: properties, error } = await supabase
         .from('properties')
-        .select('*')
+        .select('id, name, status, address, created_at, category')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
 
@@ -286,11 +286,19 @@ export function ClientPage() {
   style={{ boxShadow: '0 8px 32px 0 #181a3b12', border: '1.5px solid #e5e7eb' }}
 >
   <div className="relative w-full h-36 md:h-48">
-    <img
-      src={property.image_url || '/images/placeholder-property.jpg'}
-      alt={property.name}
-      className="object-cover w-full h-full rounded-t-3xl"
-    />
+    <span className="flex items-center justify-center w-full h-full text-5xl">
+      {(() => {
+        switch (property.category) {
+          case 'Résidence principale': return '🏠';
+          case 'Résidence secondaire': return '🏡';
+          case 'Bien locatif': return '🏢';
+          case 'Saisonnière/Airbnb': return '🌴';
+          case 'En vente': return '🏷️';
+          case 'Autre': return '❓';
+          default: return '❓';
+        }
+      })()}
+    </span>
   </div>
   <div className="p-4 md:p-6">
     <div className="flex justify-between items-center mb-2">
@@ -339,11 +347,19 @@ export function ClientPage() {
               >
                 <div className="flex items-center gap-3 bg-white/80 border border-gray-200 rounded-xl shadow-sm px-3 py-2 min-h-[56px] hover:bg-blue-50 transition">
                   <div className="flex flex-col items-center justify-center w-14">
-                    <img
-                      src={property.image_url || '/images/placeholder-property.jpg'}
-                      alt={property.name}
-                      className="object-cover w-12 h-12 rounded-lg border border-gray-200"
-                    />
+                    <span className="flex items-center justify-center w-12 h-12 text-3xl">
+                      {(() => {
+                        switch (property.category) {
+                          case 'Résidence principale': return '🏠';
+                          case 'Résidence secondaire': return '🏡';
+                          case 'Bien locatif': return '🏢';
+                          case 'Saisonnière/Airbnb': return '🌴';
+                          case 'En vente': return '🏷️';
+                          case 'Autre': return '❓';
+                          default: return '❓';
+                        }
+                      })()}
+                    </span>
                     {property.status === 'rented' && property.tenant && (
                       <div className="text-[11px] text-gray-700 font-medium mt-1 text-center w-full truncate">
                         {property.tenant.first_name} {property.tenant.last_name}
@@ -356,7 +372,7 @@ export function ClientPage() {
                   </div>
                   <div className="flex flex-col items-end ml-2">
                     <span className="font-bold text-blue-800 text-sm">{property.rent}€</span>
-<TransactionFab onClick={(e) => { setTransactionModalOpen(true); setTransactionPropertyId(property.id); }} />
+                    <TransactionFab onClick={(e) => { setTransactionModalOpen(true); setTransactionPropertyId(property.id); }} />
                     <span className={`text-xs mt-1 px-2 py-0.5 rounded-full ${property.status === 'vacant' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>{property.status === 'vacant' ? 'Disponible' : 'Loué'}</span>
                   </div>
                 </div>

@@ -659,6 +659,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                           <SelectItem value="Bien locatif">Bien locatif</SelectItem>
                           <SelectItem value="Saisonnière/Airbnb">Saisonnière/Airbnb</SelectItem>
                           <SelectItem value="Autre">Autre</SelectItem>
+<SelectItem value="En vente">En vente</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>

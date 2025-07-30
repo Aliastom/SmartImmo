@@ -1,8 +1,8 @@
 'use client'
 
+import React, { useState, useEffect } from 'react';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import { useSession } from '@supabase/auth-helpers-react';
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,11 +16,19 @@ import Image from 'next/image';
 export default function LoginPage() {
   const supabase = useSupabaseClient();
   const session = useSession();
-  const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Redirection automatique si déjà connecté
+  useEffect(() => {
+    if (session) {
+      router.replace('/dashboard');
+    }
+  }, [session, router]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

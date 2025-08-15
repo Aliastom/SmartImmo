@@ -43,9 +43,15 @@ interface Transaction {
   description: string | null
   accounting_month: string
   attachments_count: { count: number }[]
+  transaction_type: string
+  created_at?: string
   property?: {
+    id: string
     name: string
     airbnb_listing_url: string
+  }
+  type_data?: {
+    name: string
   }
 }
 
@@ -210,16 +216,15 @@ export function PropertyTransactions({ property, propertyId, onAddTransaction, o
     if (isValidUUID(propertyId)) {
       loadTransactions();
     }
-    // Sinon, on ne fait rien (évite l'erreur sur "new")
-  }, [propertyId]);
+    // On recharge aussi quand refreshTrigger change (après ajout/suppression/modification)
+  }, [propertyId, refreshTrigger, refreshTriggerLocal]);
 
   // Classement par date d'ajout DESC (plus récent en haut), stricte sur created_at si dispo
   const sortedTransactions = [...transactions].sort((a, b) => {
     // created_at DESC prioritaire, sinon date DESC
-    if (a.created_at && b.created_at) {
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    }
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    const dateA = (a as any).created_at ? new Date((a as any).created_at).getTime() : new Date(a.date).getTime();
+    const dateB = (b as any).created_at ? new Date((b as any).created_at).getTime() : new Date(b.date).getTime();
+    return dateB - dateA;
   });
 
   // Filtre sur l'année du mois comptable
@@ -590,6 +595,8 @@ export function PropertyTransactions({ property, propertyId, onAddTransaction, o
               filterCategory={filterCategory}
               filterProperty={propertyId}
               filterMonth={filterMonth}
+              filterAccountingMonths={[]}
+              filterTransactionKind="all"
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               refreshTrigger={refreshTriggerLocal}

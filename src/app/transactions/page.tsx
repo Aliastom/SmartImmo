@@ -41,6 +41,9 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [applyManagementFees, setApplyManagementFees] = useState(false);
   const [propertiesWithFees, setPropertiesWithFees] = useState<{ id: string, name: string, management_fee_percentage: number | null }[]>([]);
+  const [incomeHovered, setIncomeHovered] = useState(false);
+  const [expenseHovered, setExpenseHovered] = useState(false);
+  const [balanceHovered, setBalanceHovered] = useState(false);
 
   const hasActiveFilters = (
     searchQuery.trim() !== '' ||
@@ -367,68 +370,53 @@ useEffect(() => {
       {/* Cartes totaux stylisées glassmorphism - icônes adaptées, bilan bleu */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         {/* Revenus */}
-        {(() => {
-          const [isHovered, setIsHovered] = useState(false);
-          return (
-            <div
-              className="card-glass green relative flex flex-col justify-center p-6 overflow-hidden"
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-            >
-              <TrendingUp size={70} className="absolute opacity-10 right-2 top-2 text-green-400 pointer-events-none" />
-              <div className="text-xs font-semibold text-green-700 mb-1 z-10">+ Revenus</div>
-              <motion.div
-                animate={isHovered ? { scale: 1.08, color: '#22c55e', textShadow: '0 0 8px #22c55e88' } : { scale: 1, color: '#166534', textShadow: 'none' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-                className="text-2xl font-bold text-green-800 z-10"
-              >
-                {totalIncome.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
-              </motion.div>
-            </div>
-          );
-        })()}
+        <div
+          className="card-glass green relative flex flex-col justify-center p-6 overflow-hidden"
+          onMouseEnter={() => setIncomeHovered(true)}
+          onMouseLeave={() => setIncomeHovered(false)}
+        >
+          <TrendingUp size={70} className="absolute opacity-10 right-2 top-2 text-green-400 pointer-events-none" />
+          <div className="text-xs font-semibold text-green-700 mb-1 z-10">+ Revenus</div>
+          <motion.div
+            animate={incomeHovered ? { scale: 1.08, color: '#22c55e', textShadow: '0 0 8px #22c55e88' } : { scale: 1, color: '#166534', textShadow: 'none' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+            className="text-2xl font-bold text-green-800 z-10"
+          >
+            {totalIncome.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+          </motion.div>
+        </div>
         {/* Dépenses */}
-        {(() => {
-          const [isHovered, setIsHovered] = useState(false);
-          return (
-            <div
-              className="card-glass red relative flex flex-col justify-center p-6 overflow-hidden"
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-            >
-              <TrendingDown size={70} className="absolute opacity-10 right-2 top-2 text-red-400 pointer-events-none" />
-              <div className="text-xs font-semibold text-red-700 mb-1 z-10">- Dépenses</div>
-              <motion.div
-                animate={isHovered ? { scale: 1.08, color: '#ef4444', textShadow: '0 0 8px #ef444488' } : { scale: 1, color: '#991b1b', textShadow: 'none' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-                className="text-2xl font-bold text-red-800 z-10"
-              >
-                {totalExpense.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
-              </motion.div>
-            </div>
-          );
-        })()}
+        <div
+          className="card-glass red relative flex flex-col justify-center p-6 overflow-hidden"
+          onMouseEnter={() => setExpenseHovered(true)}
+          onMouseLeave={() => setExpenseHovered(false)}
+        >
+          <TrendingDown size={70} className="absolute opacity-10 right-2 top-2 text-red-400 pointer-events-none" />
+          <div className="text-xs font-semibold text-red-700 mb-1 z-10">- Dépenses</div>
+          <motion.div
+            animate={expenseHovered ? { scale: 1.08, color: '#ef4444', textShadow: '0 0 8px #ef444488' } : { scale: 1, color: '#991b1b', textShadow: 'none' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+            className="text-2xl font-bold text-red-800 z-10"
+          >
+            {totalExpense.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+          </motion.div>
+        </div>
         {/* Bilan */}
-        {(() => {
-          const [isHovered, setIsHovered] = useState(false);
-          return (
-            <div
-              className="card-glass blue relative flex flex-col justify-center p-6 overflow-hidden"
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-            >
-              <Sigma size={70} className="absolute opacity-10 right-2 top-2 text-blue-400 pointer-events-none" />
-              <div className="text-xs font-semibold text-blue-700 mb-1 z-10">∑ Bilan</div>
-              <motion.div
-                animate={isHovered ? { scale: 1.08, color: '#2563eb', textShadow: '0 0 8px #60a5fa88' } : { scale: 1, color: '#1e3a8a', textShadow: 'none' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-                className="text-2xl font-bold text-blue-800 z-10"
-              >
-                {balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
-              </motion.div>
-            </div>
-          );
-        })()}
+        <div
+          className="card-glass blue relative flex flex-col justify-center p-6 overflow-hidden"
+          onMouseEnter={() => setBalanceHovered(true)}
+          onMouseLeave={() => setBalanceHovered(false)}
+        >
+          <Sigma size={70} className="absolute opacity-10 right-2 top-2 text-blue-400 pointer-events-none" />
+          <div className="text-xs font-semibold text-blue-700 mb-1 z-10">∑ Bilan</div>
+          <motion.div
+            animate={balanceHovered ? { scale: 1.08, color: '#2563eb', textShadow: '0 0 8px #60a5fa88' } : { scale: 1, color: '#1e3a8a', textShadow: 'none' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+            className="text-2xl font-bold text-blue-800 z-10"
+          >
+            {balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 })}
+          </motion.div>
+        </div>
       </div>
 
       {/* Table */}

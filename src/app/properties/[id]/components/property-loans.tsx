@@ -324,12 +324,14 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
                 const key = loan?.id ? `loanid-${loan.id}` : `loanidx-${idx}`;
                 const totalAmount = Number(loan.amount) || 0;
                 const userAmount = totalAmount * part;
-                const monthly = (Number(loan.monthly_payment) || 0) * part;
+                const totalMonthly = Number(loan.monthly_payment) || 0;
+                const userMonthly = totalMonthly * part;
                 const months = loan.start_date && loan.end_date
                   ? Math.max(1, Math.round((new Date(loan.end_date).getFullYear() - new Date(loan.start_date).getFullYear()) * 12 + (new Date(loan.end_date).getMonth() - new Date(loan.start_date).getMonth()) + 1))
                   : 0;
-                const totalPaid = monthly * months;
-                const creditCost = totalPaid - userAmount;
+                const totalPaid = totalMonthly * months;
+                const creditCostTotal = totalPaid - totalAmount;
+                const creditCost = creditCostTotal * part;
                 return (
                   <motion.div key={key} variants={itemVariants}>
                     <Card className="shadow-none border border-gray-200">
@@ -343,12 +345,12 @@ export function PropertyLoans({ propertyId, purchasePrice }: PropertyLoansProps)
                             {creditCost > 0 && (
                               <motion.div className={`${vignetteMiniStyle.base} ${vignetteMiniStyle.red}`} variants={vignetteHover} initial="rest" whileHover="hover" animate="rest">
                                 <span className="font-normal">Coût crédit</span>
-                                <span className="font-bold text-sm">{formatCurrency(creditCost * part)}<span className="text-gray-500 font-normal"> / {formatCurrency(creditCost)}</span></span>
+                                <span className="font-bold text-sm">{formatCurrency(creditCost)}<span className="text-gray-500 font-normal"> / {formatCurrency(creditCostTotal)}</span></span>
                               </motion.div>
                             )}
                             <motion.div className={`${vignetteMiniStyle.base} ${vignetteMiniStyle.blue}`} variants={vignetteHover} initial="rest" whileHover="hover" animate="rest">
                               <span className="font-normal">Mensualité</span>
-                              <span className="font-bold text-sm">{formatCurrency((Number(loan.monthly_payment) || 0) * part)}<span className="text-gray-500 font-normal"> / {formatCurrency(Number(loan.monthly_payment) || 0)}</span></span>
+                              <span className="font-bold text-sm">{formatCurrency(userMonthly)}<span className="text-gray-500 font-normal"> / {formatCurrency(totalMonthly)}</span></span>
                             </motion.div>
                             <motion.div className={`${vignetteMiniStyle.base} ${vignetteMiniStyle.purple}`} variants={vignetteHover} initial="rest" whileHover="hover" animate="rest">
                               <span className="font-normal">Capital restant</span>

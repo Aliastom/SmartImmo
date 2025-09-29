@@ -11,11 +11,15 @@ interface PersonalInfoFormProps {
     first_name: string
     last_name: string
     phone: string
+    address: string
+    landlord_name: string
   }
   onSubmit: (data: {
     first_name: string
     last_name: string
     phone: string
+    address: string
+    landlord_name: string
   }) => void
   isLoading: boolean
 }
@@ -24,7 +28,9 @@ export function PersonalInfoForm({ userData, onSubmit, isLoading }: PersonalInfo
   const [formData, setFormData] = useState({
     first_name: userData.first_name,
     last_name: userData.last_name,
-    phone: userData.phone
+    phone: userData.phone,
+    address: userData.address,
+    landlord_name: userData.landlord_name
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,6 +97,29 @@ export function PersonalInfoForm({ userData, onSubmit, isLoading }: PersonalInfo
             onChange={handleChange}
             placeholder="Votre nom"
             required
+          />
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="address">Adresse (bailleur)</Label>
+          <Input
+            id="address"
+            name="address"
+            type="text"
+            value={formData.address}
+            onChange={handleChange}
+            placeholder="Votre adresse complète (utilisée pour les contrats)"
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="landlord_name">Nom bailleur / SCI (pour le contrat)</Label>
+          <Input
+            id="landlord_name"
+            name="landlord_name"
+            type="text"
+            value={formData.landlord_name}
+            onChange={handleChange}
+            placeholder="Ex: SCI Mon Patrimoine ou Dupont SARL"
           />
         </div>
       </div>

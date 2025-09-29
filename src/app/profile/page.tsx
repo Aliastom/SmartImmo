@@ -27,6 +27,8 @@ export default function ProfilePage() {
     first_name: string
     last_name: string
     phone: string
+    address: string
+    landlord_name: string
     marital_status: 'single' | 'married' | 'pacs' | 'divorced' | 'widowed'
     children: number
     tax_situation: 'single' | 'couple' | 'family'
@@ -36,6 +38,8 @@ export default function ProfilePage() {
     first_name: '',
     last_name: '',
     phone: '',
+    address: '',
+    landlord_name: '',
     marital_status: 'single',
     children: 0,
     tax_situation: 'single'
@@ -70,6 +74,8 @@ export default function ProfilePage() {
               last_name: '',
               phone: '',
               marital_status: 'single',
+              address: '',
+              landlord_name: '',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
@@ -93,6 +99,8 @@ export default function ProfilePage() {
             first_name: '',
             last_name: '',
             phone: '',
+            address: '',
+            landlord_name: '',
             marital_status: 'single',
             children: 0,
             tax_situation: 'single'
@@ -129,6 +137,8 @@ export default function ProfilePage() {
           first_name: profile?.first_name || '',
           last_name: profile?.last_name || '',
           phone: profile?.phone || '',
+          address: profile?.address || '',
+          landlord_name: (profile as any)?.landlord_name || '',
           marital_status: profile?.marital_status || 'single',
           children: taxProfile?.number_of_children || 0,
           tax_situation: taxProfile?.tax_situation || 'single'
@@ -161,7 +171,7 @@ export default function ProfilePage() {
       }
       
       // Mettre à jour le profil utilisateur
-      if (formData.first_name !== undefined || formData.last_name !== undefined || formData.phone !== undefined || formData.marital_status !== undefined) {
+      if (formData.first_name !== undefined || formData.last_name !== undefined || formData.phone !== undefined || (formData as any).address !== undefined || (formData as any).landlord_name !== undefined || formData.marital_status !== undefined) {
         const { error: updateProfileError } = await supabase
           .from('profiles')
           .update({
@@ -169,6 +179,8 @@ export default function ProfilePage() {
             last_name: formData.last_name !== undefined ? formData.last_name : userData.last_name,
             phone: formData.phone !== undefined ? formData.phone : userData.phone,
             marital_status: formData.marital_status !== undefined ? formData.marital_status : userData.marital_status,
+            address: (formData as any).address !== undefined ? (formData as any).address : userData.address,
+            landlord_name: (formData as any).landlord_name !== undefined ? (formData as any).landlord_name : userData.landlord_name,
             updated_at: new Date().toISOString()
           })
           .eq('id', session.user.id)
@@ -378,11 +390,7 @@ export default function ProfilePage() {
                     <CardContent className="pt-6">
                       <PersonalInfoForm 
                         userData={userData} 
-                        onSubmit={(data: {
-                          first_name: string;
-                          last_name: string;
-                          phone: string;
-                        }) => updateProfile(data)}
+                        onSubmit={(data) => updateProfile(data)}
                         isLoading={isLoading}
                       />
                     </CardContent>

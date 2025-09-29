@@ -84,12 +84,14 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
     insurance: '',
     management_fee_percentage: '',
     loan_interest: '',
-    category: 'Bien locatif' as 'Résidence principale' | 'Résidence secondaire' | 'Bien locatif' | 'Saisonnière/Airbnb' | 'Autre',
+    category: 'Bien locatif' as 'Résidence principale' | 'Résidence secondaire' | 'Bien locatif' | 'Saisonnière/Airbnb' | 'Autre' | 'En vente',
     purchase_date: '',
     purchase_price: '',
     property_regime_id: null as string | null,
     airbnb_listing_url: '',
     acquisition_fees: '',
+    property_type: 'Appartement' as 'Appartement' | 'Maison' | 'Studio' | 'Autre',
+    furnishing: 'Vide' as 'Vide' | 'Meublé',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -170,6 +172,8 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
         property_regime_id: formData.property_regime_id,
         airbnb_listing_url: formData.airbnb_listing_url || null,
         acquisition_fees: parseFloat(formData.acquisition_fees) || 0,
+        property_type: formData.property_type,
+        furnishing: formData.furnishing,
       }
 
       if (propertyData.area <= 0) throw new Error("La surface doit être un nombre positif")
@@ -325,14 +329,14 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
         setDvfLoading(false);
         return;
       }
-      if ((result as any)?.estimation) {
+      if (result && 'estimation' in result && result.estimation) {
         setFormData(prev => ({ ...prev, value: result.estimation.toString() }));
         setDvfNote(
           result.precision === 'commune'
             ? `Estimation basée sur la commune (prix moyen: ${result.prixM2} €/m², DVF).`
             : `Estimation à l'adresse (prix moyen: ${result.prixM2} €/m², DVF).`
         );
-        setDvfPrecision(result.precision);
+        setDvfPrecision(result.precision as 'commune' | 'adresse' | '');
         setDvfPrixM2(result.prixM2);
       } else {
         setDvfNote('Aucune estimation automatique trouvée pour cette adresse.');
@@ -379,6 +383,8 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           property_regime_id: null,
           airbnb_listing_url: '',
           acquisition_fees: '',
+          property_type: 'Appartement',
+          furnishing: 'Vide',
         })
         return
       }
@@ -419,6 +425,8 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
           property_regime_id: data.property_regime_id || null,
           airbnb_listing_url: data.airbnb_listing_url || '',
           acquisition_fees: data.acquisition_fees?.toString() || '',
+          property_type: data.property_type || 'Appartement',
+          furnishing: data.furnishing || 'Vide',
         })
         
         if (data.image_url && data.image_url !== '/images/placeholder-property.jpg') {
@@ -559,6 +567,42 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                     </td>
                   </tr>
                   <tr>
+                    <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Type de bien</td>
+                    <td className="p-3">
+                      <Select
+                        value={formData.property_type}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, property_type: value as any }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez un type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Appartement">Appartement</SelectItem>
+                          <SelectItem value="Maison">Maison</SelectItem>
+                          <SelectItem value="Studio">Studio</SelectItem>
+                          <SelectItem value="Autre">Autre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Ameublement</td>
+                    <td className="p-3">
+                      <Select
+                        value={formData.furnishing}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, furnishing: value as any }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez un type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Vide">Vide</SelectItem>
+                          <SelectItem value="Meublé">Meublé</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
+                  <tr>
                     <td className="bg-gray-50 p-3 text-sm font-medium text-gray-500 uppercase w-1/3">Chambres</td>
                     <td className="p-3">
                       <Input
@@ -647,7 +691,7 @@ export function PropertyModal({ isOpen, onClose, property, onPropertyUpdated }: 
                     <td className="p-3">
                       <Select
                         value={formData.category}
-                        onValueChange={val => setFormData(prev => ({ ...prev, category: val }))}
+                        onValueChange={val => setFormData(prev => ({ ...prev, category: val as any }))}
                         disabled={isLoading}
                       >
                         <SelectTrigger id="category">

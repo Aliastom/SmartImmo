@@ -16,3 +16,24 @@ export function formatCurrency(amount: number | null | undefined): string {
     maximumFractionDigits: 0
   })
 }
+
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Octets'
+  
+  const k = 1024
+  const sizes = ['Octets', 'Ko', 'Mo', 'Go']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+export function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}

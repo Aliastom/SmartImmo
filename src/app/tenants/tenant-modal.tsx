@@ -38,6 +38,8 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
     last_name: "",
     email: "",
     phone: "",
+    birth_date: "",
+    birth_place: "",
   })
   const [leases, setLeases] = useState<LeaseWithProperty[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -87,6 +89,8 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
             last_name: tenant.last_name || "",
             email: tenant.email || "",
             phone: tenant.phone || "",
+            birth_date: tenant.birth_date || "",
+            birth_place: tenant.birth_place || "",
           })
         } else {
           // En mode création, initialiser le formulaire avec des valeurs vides
@@ -95,6 +99,8 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
             last_name: "",
             email: "",
             phone: "",
+            birth_date: "",
+            birth_place: "",
           })
         }
       } catch (error: any) {
@@ -134,6 +140,8 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
         last_name: formData.last_name,
         email: formData.email,
         phone: formData.phone,
+        birth_date: formData.birth_date || null,
+        birth_place: formData.birth_place || null,
         user_id: session.user.id
       }
 
@@ -249,6 +257,33 @@ export function TenantModal({ isOpen, onClose, tenantId }: TenantModalProps) {
                           type="tel"
                           value={formData.phone}
                           onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                          className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 bg-gray-50 w-1/4">
+                        <Label htmlFor="birth_date" className="text-xs font-medium text-gray-500 uppercase tracking-wider">Date de naissance</Label>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          id="birth_date"
+                          type="date"
+                          value={formData.birth_date}
+                          onChange={(e) => setFormData(prev => ({ ...prev, birth_date: e.target.value }))}
+                          className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 bg-gray-50 w-1/4">
+                        <Label htmlFor="birth_place" className="text-xs font-medium text-gray-500 uppercase tracking-wider">Lieu de naissance</Label>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          id="birth_place"
+                          value={formData.birth_place}
+                          onChange={(e) => setFormData(prev => ({ ...prev, birth_place: e.target.value }))}
                           className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm"
                         />
                       </td>

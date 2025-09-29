@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, CreditCard, FileText, Users, BarChart2, Settings, ChevronRight, Loader2, X } from 'lucide-react';
+import { Home, CreditCard, FileText, Users, BarChart2, Settings, ChevronRight, Loader2, X, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -13,9 +13,12 @@ const navItems = [
   { label: 'Biens', icon: <CreditCard size={22} />, href: '/properties' },
   { label: 'Transactions', icon: <FileText size={22} />, href: '/transactions' },
   { label: 'Locataires', icon: <Users size={22} />, href: '/tenants' },
+  { label: 'Baux', icon: <FileText size={22} />, href: '/leases' },
   { label: 'Documents', icon: <FileText size={22} />, href: '/documents' },
+  { label: 'Tous les documents', icon: <FileText size={22} />, href: '/documents2' },
   { label: 'Régimes fiscaux', icon: <Settings size={22} />, href: '/regimes' },
   { label: 'Impôts', icon: <BarChart2 size={22} />, href: '/impots-premium' },
+  { label: 'Simulation Impôt', icon: <Calculator size={22} />, href: '/impots-simulation' },
   { label: 'Profil', icon: <Users size={22} />, href: '/profile' },
   { label: 'Admin', icon: <Settings size={22} />, href: '/admin' },
 ];

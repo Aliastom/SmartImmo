@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: NextRequest) {
   try {
+    // Vérifier si la clé API Resend est disponible
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('RESEND_API_KEY non configurée - fonctionnalité d\'envoi d\'email désactivée');
+      return NextResponse.json({
+        error: 'Service d\'envoi d\'email non configuré. Contactez l\'administrateur.'
+      }, { status: 503 });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
     const { leaseInfo, pdfBase64 } = await req.json();
 
     if (!leaseInfo || !leaseInfo.tenantEmail || !pdfBase64) {

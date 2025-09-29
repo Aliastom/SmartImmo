@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createSupabaseClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,6 @@ export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const supabase = createSupabaseClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,6 +23,7 @@ export default function ResetPasswordPage() {
       
       setMessage('Un email de réinitialisation a été envoyé à votre adresse')
       setError('')
+      setEmail('')
     } catch {
       setError('Une erreur est survenue lors de l\'envoi de l\'email')
       setMessage('')

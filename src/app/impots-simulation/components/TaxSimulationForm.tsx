@@ -1,13 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import type { TaxSimulationInput } from '@/types/tax-simulation';
+import { getFiscalDataForYear } from '../api/fiscal-data';
+import FiscalDetailsModal from './FiscalDetailsModal';
 
 interface TaxSimulationFormProps {
   onSubmit: (data: TaxSimulationInput) => void;
@@ -26,6 +29,48 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
     autres_revenus_imposables: 0,
     autofill_from_db: false
   });
+
+  // État pour l'autofill
+  const [isLoadingAutofill, setIsLoadingAutofill] = useState(false);
+  const [autofillError, setAutofillError] = useState<string | null>(null);
+
+  // Fonction pour charger les données fiscales depuis Supabase
+  const loadFiscalData = async () => {
+    setIsLoadingAutofill(true);
+    setAutofillError(null);
+
+    try {
+      const fiscalData = await getFiscalDataForYear();
+
+      // Mettre à jour le formulaire avec les données récupérées
+      setFormData(prev => ({
+        ...prev,
+        loyers_percus_total: fiscalData.loyersPercus,
+        charges_foncieres_total: fiscalData.chargesDeductibles,
+        autofill_from_db: true
+      }));
+    } catch (error) {
+      console.error('Erreur lors du chargement des données fiscales:', error);
+      setAutofillError(error instanceof Error ? error.message : 'Erreur lors du chargement des données');
+    } finally {
+      setIsLoadingAutofill(false);
+    }
+  };
+
+  // Effet pour gérer l'autofill
+  useEffect(() => {
+    if (formData.autofill_from_db) {
+      loadFiscalData();
+    } else {
+      // Réinitialiser les champs quand on décoche
+      setFormData(prev => ({
+        ...prev,
+        loyers_percus_total: 0,
+        charges_foncieres_total: 0,
+        autofill_from_db: false
+      }));
+    }
+  }, [formData.autofill_from_db]);
 
   const handleInputChange = (field: keyof TaxSimulationInput, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -114,18 +159,36 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
 
           {/* Informations immobilières */}
           <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="autofill_from_db"
-                checked={formData.autofill_from_db}
-                onChange={(e) => handleInputChange('autofill_from_db', e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <Label htmlFor="autofill_from_db" className="text-sm font-medium">
-                Autofill depuis mes données
-              </Label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="autofill_from_db"
+                  checked={formData.autofill_from_db}
+                  onChange={(e) => handleInputChange('autofill_from_db', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <Label htmlFor="autofill_from_db" className="text-sm font-medium">
+                  Autofill depuis mes données
+                </Label>
+                {isLoadingAutofill && (
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                )}
+              </div>
+
+              {/* Bouton pour voir le détail des calculs */}
+              {formData.autofill_from_db && (
+                <FiscalDetailsModal year={new Date().getFullYear()} />
+              )}
             </div>
+
+            {/* Affichage des erreurs d'autofill */}
+            {autofillError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <p className="text-sm text-red-600">{autofillError}</p>
+              </div>
+            )}
 
             {!formData.autofill_from_db && (
               <>
@@ -202,15 +265,24 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
                   <div>
                     <Label className="text-xs text-gray-600">Loyers perçus (autofill)</Label>
                     <div className="h-10 bg-white border border-gray-200 rounded-md flex items-center px-3">
-                      <span className="text-sm text-gray-500">Chargement...</span>
+                      <span className="text-sm text-gray-500">
+                        {isLoadingAutofill ? 'Chargement...' : `${formatCurrency(formData.loyers_percus_total || 0)}`}
+                      </span>
                     </div>
                   </div>
                   <div>
                     <Label className="text-xs text-gray-600">Charges déductibles (autofill)</Label>
                     <div className="h-10 bg-white border border-gray-200 rounded-md flex items-center px-3">
-                      <span className="text-sm text-gray-500">Chargement...</span>
+                      <span className="text-sm text-gray-500">
+                        {isLoadingAutofill ? 'Chargement...' : `${formatCurrency(formData.charges_foncieres_total || 0)}`}
+                      </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Bouton pour voir le détail */}
+                <div className="mt-3 flex justify-end">
+                  <FiscalDetailsModal year={new Date().getFullYear()} />
                 </div>
               </div>
             )}

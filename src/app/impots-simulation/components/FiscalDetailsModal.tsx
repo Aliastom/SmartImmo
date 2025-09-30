@@ -12,21 +12,32 @@ import { formatCurrency } from '@/lib/utils';
 interface FiscalDetailsModalProps {
   year?: number;
   trigger?: React.ReactNode;
+  fiscalData?: FiscalData | null;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
-export default function FiscalDetailsModal({ year, trigger }: FiscalDetailsModalProps) {
+export default function FiscalDetailsModal({ year, trigger, fiscalData: externalFiscalData, isLoading: externalIsLoading, error: externalError }: FiscalDetailsModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [fiscalData, setFiscalData] = useState<FiscalData | null>(null);
+  const [internalFiscalData, setInternalFiscalData] = useState<FiscalData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Utiliser les données externes si disponibles, sinon les données internes
+  const fiscalData = externalFiscalData ?? internalFiscalData;
+  const loading = externalIsLoading ?? isLoading;
+  const displayError = externalError ?? error;
+
   const loadFiscalData = async () => {
+    // Si on a déjà des données externes, on n'a pas besoin de les charger
+    if (externalFiscalData) return;
+
     setIsLoading(true);
     setError(null);
 
     try {
       const data = await getFiscalDataForYear(year);
-      setFiscalData(data);
+      setInternalFiscalData(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
     } finally {
@@ -36,7 +47,7 @@ export default function FiscalDetailsModal({ year, trigger }: FiscalDetailsModal
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (open && !fiscalData) {
+    if (open && !fiscalData && !externalFiscalData) {
       loadFiscalData();
     }
   };

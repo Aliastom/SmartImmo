@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import type { TaxSimulationInput } from '@/types/tax-simulation';
-import { getFiscalDataForYear } from '../api/fiscal-data';
 import FiscalDetailsModal from './FiscalDetailsModal';
+import { supabase } from '@/lib/supabase/client';
 
 interface TaxSimulationFormProps {
   onSubmit: (data: TaxSimulationInput) => void;
@@ -34,21 +34,142 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
   const [isLoadingAutofill, setIsLoadingAutofill] = useState(false);
   const [autofillError, setAutofillError] = useState<string | null>(null);
 
-  // Fonction pour charger les données fiscales depuis Supabase
+  // État pour stocker les transactions détaillées pour la modal
+  const [detailedTransactions, setDetailedTransactions] = useState<any[]>([]);
+
+  // Fonction pour charger les données fiscales depuis Supabase (côté client)
   const loadFiscalData = async () => {
     setIsLoadingAutofill(true);
     setAutofillError(null);
 
     try {
-      const fiscalData = await getFiscalDataForYear();
+      // Utiliser le client Supabase côté client
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw new Error('Erreur d\'authentification');
+      }
+
+      if (!user) {
+        throw new Error('Utilisateur non authentifié');
+      }
+
+      console.log('=== RÉCUPÉRATION DONNÉES CÔTÉ CLIENT ===');
+      console.log('Utilisateur connecté:', user.id);
+
+      // Si pas d'année spécifiée, utiliser l'année en cours
+      const targetYear = new Date().getFullYear();
+      const startDate = `${targetYear}-01`;
+      const endDate = `${targetYear}-12`;
+
+      console.log('Période:', startDate, 'à', endDate);
+
+      // Récupérer les transactions fiscales pour l'année
+      const { data: rawTransactions, error } = await supabase
+        .from('transactions')
+        .select(`
+          id,
+          amount,
+          description,
+          date,
+          accounting_month,
+          type,
+          properties!inner(name, user_id)
+        `)
+        .eq('properties.user_id', user.id)
+        .gte('accounting_month', startDate)
+        .lte('accounting_month', endDate)
+        .order('accounting_month', { ascending: false });
+
+      if (error) {
+        console.error('Erreur lors de la récupération des transactions:', error);
+        throw new Error(`Erreur lors de la récupération des données: ${error.message}`);
+      }
+
+      console.log('Nombre de transactions trouvées:', rawTransactions?.length || 0);
+
+      // Récupérer les types de transactions pour la classification
+      const { data: types } = await supabase
+        .from('types')
+        .select('id, name, category_id, deductible')
+        .in('scope', ['transaction', 'both']);
+
+      const { data: categories } = await supabase
+        .from('categories')
+        .select('id, name');
+
+      // Créer un map des types pour faciliter la recherche
+      const typesMap = new Map(types?.map((t: any) => [t.id, t]) || []);
+      const categoriesMap = new Map(categories?.map((c: any) => [c.id, c]) || []);
+
+      let loyersPercus = 0;
+      let chargesDeductibles = 0;
+      const detailedTransactions: any[] = [];
+
+      rawTransactions?.forEach((transaction: any) => {
+        const type = typesMap.get(transaction.type);
+        const category = type?.category_id ? categoriesMap.get(type.category_id) : null;
+
+        // Classifier les transactions avec des critères plus larges
+        const isLoyer = category?.name?.toLowerCase().includes('loyer') ||
+                       category?.name?.toLowerCase().includes('revenu') ||
+                       transaction.description?.toLowerCase().includes('loyer') ||
+                       transaction.description?.toLowerCase().includes('mensuel') ||
+                       transaction.description?.toLowerCase().includes('loyer') ||
+                       (type?.name?.toLowerCase().includes('loyer'));
+
+        const isChargeDeductible = type?.deductible ||
+                                 category?.name?.toLowerCase().includes('charge') ||
+                                 category?.name?.toLowerCase().includes('travaux') ||
+                                 category?.name?.toLowerCase().includes('entretien') ||
+                                 category?.name?.toLowerCase().includes('réparation') ||
+                                 category?.name?.toLowerCase().includes('frais') ||
+                                 transaction.description?.toLowerCase().includes('charge') ||
+                                 transaction.description?.toLowerCase().includes('travaux') ||
+                                 transaction.description?.toLowerCase().includes('entretien') ||
+                                 transaction.description?.toLowerCase().includes('réparation') ||
+                                 transaction.description?.toLowerCase().includes('frais');
+
+        if (isLoyer && Number(transaction.amount) > 0) {
+          loyersPercus += Number(transaction.amount);
+          detailedTransactions.push({
+            id: transaction.id,
+            amount: Number(transaction.amount),
+            description: transaction.description || '',
+            date: transaction.accounting_month || transaction.date,
+            type: 'Loyer',
+            property_name: (transaction.properties as any)?.name || 'Propriété inconnue'
+          });
+          console.log('Loyer détecté:', transaction.description, 'Montant:', transaction.amount);
+        } else if (isChargeDeductible && Number(transaction.amount) > 0) {
+          chargesDeductibles += Number(transaction.amount);
+          detailedTransactions.push({
+            id: transaction.id,
+            amount: Number(transaction.amount),
+            description: transaction.description || '',
+            date: transaction.accounting_month || transaction.date,
+            type: 'Charge déductible',
+            property_name: (transaction.properties as any)?.name || 'Propriété inconnue'
+          });
+          console.log('Charge détectée:', transaction.description, 'Montant:', transaction.amount);
+        }
+      });
+
+      console.log('=== RÉSULTATS FINAUX ===');
+      console.log('Loyers perçus:', loyersPercus);
+      console.log('Charges déductibles:', chargesDeductibles);
+
+      // Stocker les transactions détaillées pour la modal
+      setDetailedTransactions(detailedTransactions);
 
       // Mettre à jour le formulaire avec les données récupérées
       setFormData(prev => ({
         ...prev,
-        loyers_percus_total: fiscalData.loyersPercus,
-        charges_foncieres_total: fiscalData.chargesDeductibles,
+        loyers_percus_total: loyersPercus,
+        charges_foncieres_total: chargesDeductibles,
         autofill_from_db: true
       }));
+
     } catch (error) {
       console.error('Erreur lors du chargement des données fiscales:', error);
       setAutofillError(error instanceof Error ? error.message : 'Erreur lors du chargement des données');
@@ -175,11 +296,6 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
                   <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                 )}
               </div>
-
-              {/* Bouton pour voir le détail des calculs */}
-              {formData.autofill_from_db && (
-                <FiscalDetailsModal year={new Date().getFullYear()} />
-              )}
             </div>
 
             {/* Affichage des erreurs d'autofill */}
@@ -282,7 +398,14 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
 
                 {/* Bouton pour voir le détail */}
                 <div className="mt-3 flex justify-end">
-                  <FiscalDetailsModal year={new Date().getFullYear()} />
+                  <FiscalDetailsModal
+                    year={new Date().getFullYear()}
+                    fiscalData={{
+                      loyersPercus: formData.loyers_percus_total || 0,
+                      chargesDeductibles: formData.charges_foncieres_total || 0,
+                      transactions: detailedTransactions
+                    }}
+                  />
                 </div>
               </div>
             )}

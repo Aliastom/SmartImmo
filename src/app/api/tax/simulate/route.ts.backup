@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { TaxSimulationInput, TaxCalculationResult } from '@/types/tax-simulation';
+import type { TaxSimulationInput, TaxCalculationResult, AutofillData } from '@/types/tax-simulation';
+import { createClient } from '@supabase/supabase-js';
 
 // Fonction de calcul de l'IR selon les tranches fiscales
 function calculateIR(netIncome: number, parts: number, taxBrackets: any[]): number {
@@ -52,68 +53,48 @@ async function getActiveTaxParameters(year?: number): Promise<{
   taux: number;
 }> {
   try {
-    // Importation dynamique de Supabase pour éviter les problèmes de build
-    const { createClient } = await import('@supabase/supabase-js');
-
+    // Créer une instance de supabase pour les API routes
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Configuration Supabase manquante');
-    }
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Année par défaut si non spécifiée
+    // Récupérer les paramètres actifs de l'année spécifiée ou de l'année courante
     const targetYear = year || new Date().getFullYear();
+    console.log('=== RECHERCHE PARAMÈTRES ===');
+    console.log('Année cible:', targetYear);
+    console.log('Paramètre year reçu:', year);
 
-    console.log('🔍 Recherche des paramètres fiscaux pour l\'année:', targetYear);
-
-    // Requête pour récupérer les paramètres fiscaux actifs
-    const { data, error } = await supabase
+    const { data: taxParams, error } = await supabase
       .from('tax_parameters')
       .select('*')
-      .eq('year', targetYear)
       .eq('active', true)
-      .single();
+      .eq('year', targetYear)
+      .maybeSingle();
 
-    if (error) {
-      console.error('❌ Erreur lors de la récupération des paramètres fiscaux:', error);
-      console.error('Code d\'erreur:', error.code);
-      console.error('Détails:', error.details);
-      console.error('Message:', error.message);
-      throw new Error(`Paramètres fiscaux non trouvés pour l'année ${targetYear}`);
+    console.log('Résultat requête:', { taxParams, error });
+
+    if (taxParams && !error) {
+      return {
+        seuilCelibataire: taxParams.decote_seuil_celibataire,
+        seuilCouple: taxParams.decote_seuil_couple,
+        forfaitCelibataire: taxParams.decote_forfait_celibataire,
+        forfaitCouple: taxParams.decote_forfait_couple,
+        taux: taxParams.decote_taux
+      };
     }
 
-    if (!data) {
-      console.error('❌ Aucun paramètre fiscal trouvé pour l\'année', targetYear);
-      throw new Error(`Aucun paramètre fiscal actif trouvé pour l'année ${targetYear}`);
-    }
-
-    console.log('✅ Paramètres fiscaux récupérés depuis Supabase:');
-    console.log('- ID:', data.id);
-    console.log('- Année:', data.year);
-    console.log('- Actif:', data.active);
-    console.log('- Seuil célibataire:', data.decote_seuil_celibataire);
-    console.log('- Seuil couple:', data.decote_seuil_couple);
-    console.log('- Forfait célibataire:', data.decote_forfait_celibataire);
-    console.log('- Forfait couple:', data.decote_forfait_couple);
-    console.log('- Taux décote:', data.decote_taux);
-    console.log('📊 Données complètes:', data);
-
+    // Fallback aux valeurs par défaut si pas de paramètres en base
+    console.warn(`Aucun paramètre fiscal trouvé pour l'année ${targetYear}, utilisation des valeurs par défaut`);
     return {
-      seuilCelibataire: data.decote_seuil_celibataire || 1964,
-      seuilCouple: data.decote_seuil_couple || 3248,
-      forfaitCelibataire: data.decote_forfait_celibataire || 889,
-      forfaitCouple: data.decote_forfait_couple || 1470,
-      taux: data.decote_taux || 0.4525
+      seuilCelibataire: 1964,
+      seuilCouple: 3248,
+      forfaitCelibataire: 889,
+      forfaitCouple: 1470,
+      taux: 0.4525
     };
-
   } catch (error) {
-    console.error('❌ Erreur récupération paramètres fiscaux:', error);
-
+    console.error('Erreur lors de la récupération des paramètres fiscaux:', error);
     // Fallback aux valeurs par défaut en cas d'erreur
-    console.warn('⚠️ Utilisation des paramètres fiscaux par défaut (fallback)');
     return {
       seuilCelibataire: 1964,
       seuilCouple: 3248,

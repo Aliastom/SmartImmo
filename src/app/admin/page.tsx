@@ -27,19 +27,31 @@ interface Type {
   visible: boolean;
 }
 
+interface TaxParameter {
+  id: string;
+  year: number;
+  decote_seuil_celibataire: number;
+  decote_seuil_couple: number;
+  decote_forfait_celibataire: number;
+  decote_forfait_couple: number;
+  decote_taux: number;
+  active: boolean;
+}
+
 export default function AdminPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [types, setTypes] = useState<Type[]>([]);
+  const [taxParameters, setTaxParameters] = useState<TaxParameter[]>([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'category' | 'type'>('category');
+  const [modalMode, setModalMode] = useState<'category' | 'type' | 'taxParameter'>('category');
   const [modalInitialData, setModalInitialData] = useState<any>({});
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'category' | 'type'; item: any } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'category' | 'type' | 'taxParameter'; item: any } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('');
 
@@ -78,6 +90,8 @@ export default function AdminPage() {
     setCategories(catData || []);
     const { data: typeData } = await supabase.from('types').select('*');
     setTypes(typeData || []);
+    const { data: taxParamsData } = await supabase.from('tax_parameters').select('*').order('year', { ascending: false });
+    setTaxParameters(taxParamsData || []);
     setLoading(false);
   }
 
@@ -131,6 +145,38 @@ export default function AdminPage() {
     setDeleteTarget({ type: 'type', item: type });
     setDeleteModalOpen(true);
   }
+  // Gestion des paramètres fiscaux
+  function openAddTaxParameterModal() {
+    setModalMode('taxParameter');
+    setModalInitialData({
+      year: new Date().getFullYear() + 1,
+      decote_seuil_celibataire: 1964,
+      decote_seuil_couple: 3248,
+      decote_forfait_celibataire: 889,
+      decote_forfait_couple: 1470,
+      decote_taux: 0.4525,
+      active: true
+    });
+    setModalOpen(true);
+  }
+
+  function openEditTaxParameterModal(param: TaxParameter) {
+    setModalMode('taxParameter');
+    setModalInitialData(param);
+    setModalOpen(true);
+  }
+
+  function openDeleteTaxParameter(param: TaxParameter) {
+    setDeleteTarget({ type: 'taxParameter', item: param });
+    setDeleteModalOpen(true);
+  }
+
+  async function toggleTaxParameterActive(paramId: string, current: boolean) {
+    setLoading(true);
+    await supabase.from('tax_parameters').update({ active: !current }).eq('id', paramId);
+    await fetchData();
+    setLoading(false);
+  }
 
   // Sauvegarde
   async function handleSaveCategoryType(form: any) {
@@ -151,7 +197,7 @@ export default function AdminPage() {
           active: form.active
         });
       }
-    } else {
+    } else if (modalMode === 'type') {
       if (form.id) {
         await supabase.from('types').update({
           name: form.name,
@@ -169,6 +215,28 @@ export default function AdminPage() {
           scope: form.scope,
           active: form.active,
           deductible: form.deductible
+        });
+      }
+    } else if (modalMode === 'taxParameter') {
+      if (form.id) {
+        await supabase.from('tax_parameters').update({
+          year: form.year,
+          decote_seuil_celibataire: form.decote_seuil_celibataire,
+          decote_seuil_couple: form.decote_seuil_couple,
+          decote_forfait_celibataire: form.decote_forfait_celibataire,
+          decote_forfait_couple: form.decote_forfait_couple,
+          decote_taux: form.decote_taux,
+          active: form.active
+        }).eq('id', form.id);
+      } else {
+        await supabase.from('tax_parameters').insert({
+          year: form.year,
+          decote_seuil_celibataire: form.decote_seuil_celibataire,
+          decote_seuil_couple: form.decote_seuil_couple,
+          decote_forfait_celibataire: form.decote_forfait_celibataire,
+          decote_forfait_couple: form.decote_forfait_couple,
+          decote_taux: form.decote_taux,
+          active: form.active
         });
       }
     }
@@ -191,7 +259,7 @@ export default function AdminPage() {
         return;
       }
       await supabase.from('categories').delete().eq('id', deleteTarget.item.id);
-    } else {
+    } else if (deleteTarget.type === 'type') {
       // Vérifier s'il y a des transactions associées à ce type
       // (On suppose qu'il existe une table 'transactions' avec un champ 'type_id')
       const { data: transactions, error } = await supabase.from('transactions').select('id').eq('type_id', deleteTarget.item.id);
@@ -202,6 +270,8 @@ export default function AdminPage() {
         return;
       }
       await supabase.from('types').delete().eq('id', deleteTarget.item.id);
+    } else if (deleteTarget.type === 'taxParameter') {
+      await supabase.from('tax_parameters').delete().eq('id', deleteTarget.item.id);
     }
     setDeleteLoading(false);
     setDeleteModalOpen(false);
@@ -242,7 +312,7 @@ export default function AdminPage() {
         onButtonClick={openAddCategoryModal}
         className="mb-6 mt-2 px-0"
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
         {/* Catégories */}
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
           <div className="flex items-center justify-between mb-6">
@@ -338,6 +408,68 @@ export default function AdminPage() {
           </ul>
         </div>
       </div>
+
+      {/* Paramètres fiscaux */}
+      <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-700">Paramètres fiscaux</h2>
+          <button className="bg-green-600 hover:bg-green-700 transition text-white px-5 py-2 rounded-lg font-medium shadow" onClick={openAddTaxParameterModal}>Ajouter</button>
+        </div>
+        <div className="grid gap-4">
+          {taxParameters.map(param => (
+            <div key={param.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h3 className="font-semibold text-gray-800">Année {param.year}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-xs px-2 py-1 rounded-full ${param.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {param.active ? 'Actif' : 'Inactif'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className={`p-2 rounded-full transition ${param.active ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}`}
+                    title={param.active ? 'Désactiver' : 'Activer'}
+                    onClick={() => toggleTaxParameterActive(param.id, param.active)}
+                    disabled={loading}
+                  >
+                    {param.active ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    )}
+                  </button>
+                  <button className="text-xs text-indigo-600 hover:text-indigo-800 transition font-medium" onClick={() => openEditTaxParameterModal(param)}>éditer</button>
+                  <button className="text-xs text-red-600 hover:text-red-800 transition font-medium" onClick={() => openDeleteTaxParameter(param)}>supprimer</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-600">Seuil célibataire:</span>
+                  <span className="ml-2 font-semibold text-gray-800">{param.decote_seuil_celibataire.toLocaleString()}€</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Seuil couple:</span>
+                  <span className="ml-2 font-semibold text-gray-800">{param.decote_seuil_couple.toLocaleString()}€</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Forfait célibataire:</span>
+                  <span className="ml-2 font-semibold text-gray-800">{param.decote_forfait_celibataire.toLocaleString()}€</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Forfait couple:</span>
+                  <span className="ml-2 font-semibold text-gray-800">{param.decote_forfait_couple.toLocaleString()}€</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Taux décote:</span>
+                  <span className="ml-2 font-semibold text-gray-800">{(param.decote_taux * 100).toFixed(2)}%</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
       {loading && <div className="mt-6 text-center text-gray-400">Chargement...</div>}
       <CategoryTypeModal
         open={modalOpen}
@@ -349,11 +481,13 @@ export default function AdminPage() {
       />
       <DeleteConfirmModal
         open={deleteModalOpen}
-        title={deleteTarget?.type === 'category' ? 'Supprimer la catégorie' : 'Supprimer le type'}
+        title={deleteTarget?.type === 'category' ? 'Supprimer la catégorie' : deleteTarget?.type === 'type' ? 'Supprimer le type' : 'Supprimer les paramètres fiscaux'}
         message={
           deleteTarget?.type === 'category'
             ? 'Voulez-vous vraiment supprimer cette catégorie ? (Impossible si des types y sont associés)'
-            : 'Voulez-vous vraiment supprimer ce type ? (Impossible si des transactions y sont associées)'
+            : deleteTarget?.type === 'type'
+            ? 'Voulez-vous vraiment supprimer ce type ? (Impossible si des transactions y sont associées)'
+            : 'Voulez-vous vraiment supprimer ces paramètres fiscaux ?'
         }
         onCancel={() => { setDeleteModalOpen(false); setDeleteLoading(false); }}
         onConfirm={handleConfirmDelete}

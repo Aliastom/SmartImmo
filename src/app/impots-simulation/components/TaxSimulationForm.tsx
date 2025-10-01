@@ -1,16 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import type { TaxSimulationInput } from '@/types/tax-simulation';
+import { Loader2, AlertCircle } from 'lucide-react';
 import FiscalDetailsModal from './FiscalDetailsModal';
 import { supabase } from '@/lib/supabase/client';
+
+interface TaxSimulationInput {
+  salaire_brut_annuel: number;
+  parts_quotient_familial: number;
+  situation_familiale: 'celibataire' | 'couple';
+  versement_PER_deductible?: number;
+  loyers_percus_total?: number;
+  charges_foncieres_total?: number;
+  travaux_deja_effectues?: number;
+  pourcentage_gestion?: number;
+  regime_foncier: 'reel' | 'micro';
+  autres_revenus_imposables?: number;
+  autofill_from_db?: boolean;
+  inclure_frais_gestion_autofill?: boolean;
+  annee_parametres?: number;
+}
 
 interface TaxSimulationFormProps {
   onSubmit: (data: TaxSimulationInput) => void;
@@ -19,15 +34,19 @@ interface TaxSimulationFormProps {
 
 export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSimulationFormProps) {
   const [formData, setFormData] = useState<TaxSimulationInput>({
-    salaire_brut_annuel: 0,
+    salaire_brut_annuel: 48000,
     parts_quotient_familial: 1,
+    situation_familiale: 'celibataire',
     versement_PER_deductible: 0,
     loyers_percus_total: 0,
     charges_foncieres_total: 0,
     travaux_deja_effectues: 0,
+    pourcentage_gestion: 6, // 6% par défaut
     regime_foncier: 'reel',
     autres_revenus_imposables: 0,
-    autofill_from_db: false
+    autofill_from_db: false,
+    inclure_frais_gestion_autofill: true, // Par défaut, inclure les frais de gestion
+    annee_parametres: new Date().getFullYear() // Année courante par défaut
   });
 
   // État pour l'autofill
@@ -43,12 +62,7 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
     setAutofillError(null);
 
     try {
-      // Utiliser le client Supabase côté client
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      if (authError) {
-        throw new Error('Erreur d\'authentification');
-      }
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         throw new Error('Utilisateur non authentifié');
@@ -74,6 +88,7 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
           date,
           accounting_month,
           type,
+          property_id,
           properties!inner(name, user_id)
         `)
         .eq('properties.user_id', user.id)
@@ -106,9 +121,65 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
       let chargesDeductibles = 0;
       const detailedTransactions: any[] = [];
 
+      // Récupérer les propriétés avec leurs pourcentages de gestion (si la colonne existe)
+      let properties: any[] = [];
+
+      try {
+        // D'abord essayer de récupérer avec la colonne management_fee_percentage
+        const { data: propertiesWithGestion, error: errorWithGestion } = await supabase
+          .from('properties')
+          .select('id, name, management_fee_percentage')
+          .eq('user_id', user.id);
+
+        console.log('=== DEBUG PROPRIÉTÉS ===');
+        console.log('Tentative de récupération avec management_fee_percentage');
+        console.log('Erreur éventuelle:', errorWithGestion);
+        console.log('Propriétés trouvées:', propertiesWithGestion?.length || 0);
+        if (propertiesWithGestion) {
+          propertiesWithGestion.forEach(p => {
+            console.log(`Propriété: ${p.name}, ID: ${p.id}, % gestion: ${p.management_fee_percentage}`);
+          });
+        }
+
+        if (errorWithGestion) {
+          console.log('❌ Colonne management_fee_percentage non trouvée');
+          // Si la colonne n'existe pas, récupérer seulement les propriétés de base
+          const { data: basicProperties } = await supabase
+            .from('properties')
+            .select('id, name')
+            .eq('user_id', user.id);
+
+          properties = basicProperties?.map(p => ({
+            ...p,
+            management_fee_percentage: 6 // Valeur par défaut
+          })) || [];
+          console.log('✅ Utilisation des propriétés de base avec % par défaut');
+        } else if (propertiesWithGestion && propertiesWithGestion.length > 0) {
+          properties = propertiesWithGestion;
+          console.log('✅ Propriétés récupérées avec management_fee_percentage');
+        } else {
+          console.log('⚠️ Aucune propriété trouvée');
+          properties = [];
+        }
+      } catch (error) {
+        console.log('❌ Erreur lors de la récupération des propriétés:', error);
+        properties = [];
+      }
+
+      // Créer un map des propriétés pour faciliter la recherche
+      const propertiesMap = new Map(properties?.map((p: any) => [p.id, p]) || []);
+
       rawTransactions?.forEach((transaction: any) => {
         const type = typesMap.get(transaction.type);
         const category = type?.category_id ? categoriesMap.get(type.category_id) : null;
+        const property = propertiesMap.get(transaction.property_id);
+        const gestionPercentage = property?.management_fee_percentage || 6; // Utiliser le % de la propriété ou 6% par défaut
+
+        console.log('=== DEBUG TRANSACTION ===');
+        console.log('Transaction ID:', transaction.id);
+        console.log('Property ID:', transaction.property_id);
+        console.log('Propriété trouvée:', property?.name);
+        console.log('Pourcentage gestion utilisé:', gestionPercentage);
 
         // Classifier les transactions avec des critères plus larges
         const isLoyer = category?.name?.toLowerCase().includes('loyer') ||
@@ -132,15 +203,18 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
 
         if (isLoyer && Number(transaction.amount) > 0) {
           loyersPercus += Number(transaction.amount);
+
           detailedTransactions.push({
             id: transaction.id,
             amount: Number(transaction.amount),
             description: transaction.description || '',
             date: transaction.accounting_month || transaction.date,
             type: 'Loyer',
-            property_name: (transaction.properties as any)?.name || 'Propriété inconnue'
+            property_name: property?.name || 'Propriété inconnue',
+            gestion_percentage: gestionPercentage,
+            frais_gestion: Number(transaction.amount) * (gestionPercentage / 100)
           });
-          console.log('Loyer détecté:', transaction.description, 'Montant:', transaction.amount);
+          console.log('Loyer détecté:', transaction.description, 'Montant:', transaction.amount, 'Gestion %:', gestionPercentage);
         } else if (isChargeDeductible && Number(transaction.amount) > 0) {
           chargesDeductibles += Number(transaction.amount);
           detailedTransactions.push({
@@ -149,15 +223,44 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
             description: transaction.description || '',
             date: transaction.accounting_month || transaction.date,
             type: 'Charge déductible',
-            property_name: (transaction.properties as any)?.name || 'Propriété inconnue'
+            property_name: property?.name || 'Propriété inconnue',
+            gestion_percentage: 0,
+            frais_gestion: 0
           });
           console.log('Charge détectée:', transaction.description, 'Montant:', transaction.amount);
         }
       });
 
+      // Calculer le pourcentage de gestion moyen pondéré selon les loyers de chaque propriété
+      let totalLoyersPondere = 0;
+      let totalGestionPondere = 0;
+
+      // Grouper les loyers par propriété
+      const loyersParPropriete = new Map();
+      detailedTransactions.forEach(transaction => {
+        if (transaction.type === 'Loyer') {
+          const current = loyersParPropriete.get(transaction.property_name) || 0;
+          loyersParPropriete.set(transaction.property_name, current + transaction.amount);
+        }
+      });
+
+      // Calculer la moyenne pondérée des pourcentages de gestion
+      loyersParPropriete.forEach((loyerTotal, propertyName) => {
+        const propertyTransactions = detailedTransactions.filter(t => t.property_name === propertyName && t.type === 'Loyer');
+        if (propertyTransactions.length > 0) {
+          const gestionPercentage = propertyTransactions[0].gestion_percentage;
+          totalLoyersPondere += loyerTotal;
+          totalGestionPondere += loyerTotal * (gestionPercentage / 100);
+        }
+      });
+
+      const pourcentageGestionFinal = totalLoyersPondere > 0 ? (totalGestionPondere / totalLoyersPondere) * 100 : 6;
+
       console.log('=== RÉSULTATS FINAUX ===');
       console.log('Loyers perçus:', loyersPercus);
       console.log('Charges déductibles:', chargesDeductibles);
+      console.log('Pourcentage gestion utilisé:', pourcentageGestionFinal);
+      console.log('Inclure frais de gestion:', formData.inclure_frais_gestion_autofill);
 
       // Stocker les transactions détaillées pour la modal
       setDetailedTransactions(detailedTransactions);
@@ -167,8 +270,16 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
         ...prev,
         loyers_percus_total: loyersPercus,
         charges_foncieres_total: chargesDeductibles,
+        pourcentage_gestion: pourcentageGestionFinal,
+        travaux_deja_effectues: 0, // Remettre à zéro car non géré par autofill
+        // Conserver le régime foncier choisi par l'utilisateur
         autofill_from_db: true
       }));
+
+      console.log('=== DEBUG AUTOFILL FINAL ===');
+      console.log('Charges déductibles (sans frais de gestion):', chargesDeductibles);
+      console.log('Frais de gestion à ajouter côté serveur:', loyersPercus * (pourcentageGestionFinal / 100));
+      console.log('Total charges finales (avec frais de gestion):', chargesDeductibles + (loyersPercus * (pourcentageGestionFinal / 100)));
 
     } catch (error) {
       console.error('Erreur lors du chargement des données fiscales:', error);
@@ -183,12 +294,13 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
     if (formData.autofill_from_db) {
       loadFiscalData();
     } else {
-      // Réinitialiser les champs quand on décoche
+      // Réinitialiser seulement les champs gérés par l'autofill quand on décoche
       setFormData(prev => ({
         ...prev,
         loyers_percus_total: 0,
         charges_foncieres_total: 0,
-        autofill_from_db: false
+        travaux_deja_effectues: 0
+        // Ne pas réinitialiser regime_foncier pour conserver le choix de l'utilisateur
       }));
     }
   }, [formData.autofill_from_db]);
@@ -199,7 +311,40 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+
+    // Si autofill est activé mais pas encore chargé, attendre ou afficher une erreur
+    if (formData.autofill_from_db && isLoadingAutofill) {
+      setAutofillError('Veuillez attendre le chargement des données autofill avant de calculer.');
+      return;
+    }
+
+    // Si autofill est activé et il y a une erreur, ne pas soumettre
+    if (formData.autofill_from_db && autofillError) {
+      return;
+    }
+
+    // S'assurer que les valeurs sont correctement formatées pour l'envoi
+    const dataToSubmit = {
+      ...formData,
+      loyers_percus_total: Number(formData.loyers_percus_total) || 0,
+      charges_foncieres_total: Number(formData.charges_foncieres_total) || 0,
+      travaux_deja_effectues: Number(formData.travaux_deja_effectues) || 0,
+      pourcentage_gestion: Number(formData.pourcentage_gestion) || 0,
+      salaire_brut_annuel: Number(formData.salaire_brut_annuel) || 0,
+      parts_quotient_familial: Number(formData.parts_quotient_familial) || 1,
+      versement_PER_deductible: Number(formData.versement_PER_deductible) || 0,
+      autres_revenus_imposables: Number(formData.autres_revenus_imposables) || 0,
+      inclure_frais_gestion_autofill: Boolean(formData.inclure_frais_gestion_autofill)
+    };
+
+    console.log('=== DONNÉES SOUMISES ===');
+    console.log('Loyers perçus:', dataToSubmit.loyers_percus_total);
+    console.log('Charges déductibles:', dataToSubmit.charges_foncieres_total);
+    console.log('Pourcentage gestion:', dataToSubmit.pourcentage_gestion);
+    console.log('Autofill activé:', dataToSubmit.autofill_from_db);
+    console.log('Données complètes:', dataToSubmit);
+
+    onSubmit(dataToSubmit);
   };
 
   const formatCurrency = (value: number) => {
@@ -249,6 +394,35 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
                   required
                 />
               </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="situation_familiale"
+                checked={formData.situation_familiale === 'couple'}
+                onChange={(e) => handleInputChange('situation_familiale', e.target.checked ? 'couple' : 'celibataire')}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <Label htmlFor="situation_familiale" className="text-sm font-medium">
+                Couple (imposition commune)
+              </Label>
+            </div>
+
+            <div>
+              <Label htmlFor="annee_parametres">Année des paramètres fiscaux</Label>
+              <Input
+                id="annee_parametres"
+                type="number"
+                min="2020"
+                max="2030"
+                value={formData.annee_parametres || ''}
+                onChange={(e) => handleInputChange('annee_parametres', parseInt(e.target.value) || new Date().getFullYear())}
+                placeholder={new Date().getFullYear().toString()}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Année des paramètres de décote à utiliser (par défaut : année courante)
+              </p>
             </div>
 
             <div>
@@ -336,6 +510,23 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
                   </div>
 
                   <div>
+                    <Label htmlFor="pourcentage_gestion">% de frais de gestion</Label>
+                    <Input
+                      id="pourcentage_gestion"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={formData.pourcentage_gestion || ''}
+                      onChange={(e) => handleInputChange('pourcentage_gestion', parseFloat(e.target.value) || 0)}
+                      placeholder="6"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Frais de gestion calculés sur les loyers perçus
+                    </p>
+                  </div>
+
+                  <div>
                     <Label htmlFor="travaux_deja_effectues">Travaux déjà effectués cette année (€)</Label>
                     <Input
                       id="travaux_deja_effectues"
@@ -393,7 +584,77 @@ export default function TaxSimulationForm({ onSubmit, isLoading = false }: TaxSi
                         {isLoadingAutofill ? 'Chargement...' : `${formatCurrency(formData.charges_foncieres_total || 0)}`}
                       </span>
                     </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Charges trouvées dans vos transactions (sans frais de gestion)
+                    </p>
                   </div>
+                </div>
+
+                {/* Affichage du total des charges incluant les frais de gestion */}
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-green-700">Total charges déductibles</span>
+                      <p className="text-xs text-green-600">
+                        (incluant frais de gestion de {formatCurrency((formData.loyers_percus_total || 0) * (formData.pourcentage_gestion || 0) / 100)})
+                      </p>
+                    </div>
+                    <span className="text-lg font-semibold text-green-700">
+                      {formatCurrency((formData.charges_foncieres_total || 0) + (formData.loyers_percus_total || 0) * (formData.pourcentage_gestion || 0) / 100)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Case à cocher pour inclure les frais de gestion */}
+                <div className="mt-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="inclure_frais_gestion_autofill"
+                      checked={formData.inclure_frais_gestion_autofill}
+                      onChange={(e) => handleInputChange('inclure_frais_gestion_autofill', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <Label htmlFor="inclure_frais_gestion_autofill" className="text-sm text-gray-700">
+                      Inclure les frais de gestion ({formData.pourcentage_gestion?.toFixed(1) || '0'}% - moyenne pondérée) dans les charges déductibles
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                    {formData.inclure_frais_gestion_autofill
+                      ? `Frais de gestion ajoutés : ${formatCurrency((formData.loyers_percus_total || 0) * (formData.pourcentage_gestion || 0) / 100)} (${formData.pourcentage_gestion?.toFixed(1) || 0}%)`
+                      : 'Les frais de gestion ne seront pas déduits des revenus fonciers'
+                    }
+                  </p>
+                </div>
+
+                {/* Régime foncier - conservé même en mode autofill */}
+                <div className="mt-4">
+                  <Label htmlFor="regime_foncier">Régime foncier</Label>
+                  <Select
+                    value={formData.regime_foncier}
+                    onValueChange={(value: 'reel' | 'micro') => handleInputChange('regime_foncier', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner le régime" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="reel">Régime réel</SelectItem>
+                      <SelectItem value="micro">Micro-foncier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Travaux déjà effectués - champ éditable même en mode autofill */}
+                <div className="mt-4">
+                  <Label htmlFor="travaux_deja_effectues">Travaux déjà effectués cette année (€)</Label>
+                  <Input
+                    id="travaux_deja_effectues"
+                    type="number"
+                    step="0.01"
+                    value={formData.travaux_deja_effectues || ''}
+                    onChange={(e) => handleInputChange('travaux_deja_effectues', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                  />
                 </div>
 
                 {/* Bouton pour voir le détail */}

@@ -1,13 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Eye, Calculator, TrendingUp, TrendingDown } from 'lucide-react';
-import { getFiscalDataForYear, type FiscalData } from '../api/fiscal-data';
 import { formatCurrency } from '@/lib/utils';
+
+interface TransactionWithGestion {
+  id: string;
+  amount: number;
+  description: string;
+  date: string;
+  type: string;
+  property_name: string;
+  gestion_percentage?: number;
+  frais_gestion?: number;
+}
+
+interface FiscalData {
+  loyersPercus: number;
+  chargesDeductibles: number;
+  transactions: TransactionWithGestion[];
+}
 
 interface FiscalDetailsModalProps {
   year?: number;
@@ -32,17 +48,9 @@ export default function FiscalDetailsModal({ year, trigger, fiscalData: external
     // Si on a déjà des données externes, on n'a pas besoin de les charger
     if (externalFiscalData) return;
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await getFiscalDataForYear(year);
-      setInternalFiscalData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
-    } finally {
-      setIsLoading(false);
-    }
+    // Pour l'instant, pas de chargement dynamique
+    // Les données sont passées en props depuis le composant parent
+    return;
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -141,14 +149,16 @@ export default function FiscalDetailsModal({ year, trigger, fiscalData: external
                   {fiscalData.transactions.length > 0 ? (
                     <div className="border rounded-lg bg-white">
                       <div className="overflow-x-auto">
-                        <Table className="min-w-[800px]">
+                        <Table className="min-w-[1000px]">
                           <TableHeader>
                             <TableRow className="bg-gray-50">
                               <TableHead className="w-[100px] min-w-[100px]">Date</TableHead>
                               <TableHead className="w-[120px] min-w-[120px]">Type</TableHead>
                               <TableHead className="w-[200px] min-w-[200px]">Propriété</TableHead>
-                              <TableHead className="w-[400px] min-w-[400px]">Description</TableHead>
+                              <TableHead className="w-[300px] min-w-[300px]">Description</TableHead>
                               <TableHead className="w-[120px] min-w-[120px] text-right">Montant</TableHead>
+                              <TableHead className="w-[100px] min-w-[100px] text-right">% Gestion</TableHead>
+                              <TableHead className="w-[120px] min-w-[120px] text-right">Frais gestion</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -176,6 +186,18 @@ export default function FiscalDetailsModal({ year, trigger, fiscalData: external
                                 }`}>
                                   {formatCurrency(transaction.amount)}
                                 </TableCell>
+                                <TableCell className="text-right font-semibold text-purple-600">
+                                  {transaction.type === 'Loyer' && transaction.gestion_percentage && transaction.gestion_percentage > 0
+                                    ? `${transaction.gestion_percentage}%`
+                                    : '-'
+                                  }
+                                </TableCell>
+                                <TableCell className="text-right font-semibold text-orange-600">
+                                  {transaction.type === 'Loyer' && transaction.frais_gestion && transaction.frais_gestion > 0
+                                    ? formatCurrency(transaction.frais_gestion)
+                                    : '-'
+                                  }
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -193,26 +215,57 @@ export default function FiscalDetailsModal({ year, trigger, fiscalData: external
                   )}
                 </div>
 
-                {/* Informations complémentaires */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                {/* Informations sur les frais de gestion */}
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
                     <div>
-                      <h4 className="font-semibold text-yellow-700 mb-1">💡 Informations</h4>
-                      <p className="text-sm text-yellow-600">
-                        Seules les transactions des propriétés dont vous êtes propriétaire sont prises en compte.
-                        Les montants sont calculés pour l'année fiscale {year || new Date().getFullYear()}.
+                      <h4 className="font-semibold text-orange-700 mb-1">📊 Frais de gestion</h4>
+                      <p className="text-sm text-orange-600">
+                        Pourcentage moyen pondéré calculé selon les loyers de chaque propriété.
                       </p>
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-sm font-medium text-yellow-700 hover:text-yellow-800">
-                          🔍 Voir les détails techniques
-                        </summary>
-                        <div className="mt-2 text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
-                          <p><strong>Débogage :</strong> Vérifiez la console du navigateur pour voir les logs détaillés de classification des transactions.</p>
-                          <p><strong>Période :</strong> Du 1er janvier au 31 décembre {year || new Date().getFullYear()}</p>
-                          <p><strong>Champ utilisé :</strong> accounting_month (au lieu de date)</p>
+                      <div className="mt-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-orange-600">Pourcentage moyen :</span>
+                          <span className="font-semibold text-orange-700">
+                            {(() => {
+                              const loyerTransactions = fiscalData.transactions.filter(t => t.type === 'Loyer' && t.gestion_percentage);
+                              if (loyerTransactions.length === 0) return '0%';
+
+                              let totalLoyersPondere = 0;
+                              let totalGestionPondere = 0;
+
+                              // Grouper par propriété
+                              const loyersParPropriete = new Map();
+                              loyerTransactions.forEach(t => {
+                                const current = loyersParPropriete.get(t.property_name) || 0;
+                                loyersParPropriete.set(t.property_name, current + t.amount);
+                              });
+
+                              // Calculer moyenne pondérée
+                              loyersParPropriete.forEach((loyerTotal, propertyName) => {
+                                const propTransactions = loyerTransactions.filter(t => t.property_name === propertyName);
+                                if (propTransactions.length > 0 && propTransactions[0] && propTransactions[0].gestion_percentage) {
+                                  totalLoyersPondere += loyerTotal;
+                                  totalGestionPondere += loyerTotal * (propTransactions[0].gestion_percentage / 100);
+                                }
+                              });
+
+                              const moyenne = totalLoyersPondere > 0 ? (totalGestionPondere / totalLoyersPondere) * 100 : 0;
+                              return `${moyenne.toFixed(2)}%`;
+                            })()}
+                          </span>
                         </div>
-                      </details>
+                        <div className="flex justify-between">
+                          <span className="text-orange-600">Total frais de gestion :</span>
+                          <span className="font-semibold text-orange-700">
+                            {formatCurrency(fiscalData.transactions
+                              .filter(t => t.type === 'Loyer')
+                              .reduce((sum, t) => sum + (t.frais_gestion || 0), 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

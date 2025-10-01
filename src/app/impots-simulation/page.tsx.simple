@@ -1,0 +1,254 @@
+'use client';
+
+import React, { useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { formatCurrency } from '@/lib/formatters';
+import TaxSimulationForm from './components/TaxSimulationForm';
+import { TaxSimulationInput, TaxCalculationResult } from '@/types/tax-simulation';
+
+export default function TaxSimulationPage() {
+  const [inputData, setInputData] = useState<TaxSimulationInput | null>(null);
+  const [results, setResults] = useState<TaxCalculationResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showTaxCalculationModal, setShowTaxCalculationModal] = useState(false);
+  const [showDecoteModal, setShowDecoteModal] = useState(false);
+
+  // Gestionnaire de formulaire
+  const handleFormSubmit = async (data: TaxSimulationInput) => {
+    setIsLoading(true);
+    setError(null);
+    setInputData(data);
+
+    try {
+      const response = await fetch('/api/tax/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur serveur: ${response.status}`);
+      }
+
+      const results = await response.json();
+      setResults(results);
+    } catch (error) {
+      console.error('Erreur lors du calcul:', error);
+      setError(error instanceof Error ? error.message : 'Erreur inconnue');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Gestionnaire de nouvelle simulation
+  const handleNewSimulation = () => {
+    setInputData(null);
+    setResults(null);
+    setError(null);
+    setShowTaxCalculationModal(false);
+    setShowDecoteModal(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-4">
+      <div className="container mx-auto px-4 max-w-7xl">
+        {/* Titre */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center p-4 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg text-white">
+            <div>
+              <h1 className="text-2xl font-bold">SIMULATION IMPÔT FR</h1>
+              <p className="text-blue-100 mt-1">Calcul d'impact fiscal de votre investissement immobilier</p>
+            </div>
+            <button
+              onClick={handleNewSimulation}
+              className="px-4 py-2 text-sm bg-white text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              Nouvelle simulation
+            </button>
+          </div>
+        </div>
+
+        {/* Grille principale 2 colonnes */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Colonne 1 : Formulaire */}
+          <div className="bg-white rounded-lg p-6 border border-slate-200">
+            <TaxSimulationForm onSubmit={handleFormSubmit} isLoading={isLoading} />
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                <div className="text-center text-red-700">
+                  <p className="font-semibold text-sm">Erreur</p>
+                  <p className="text-sm">{error}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Colonne 2 : Résultats */}
+          {results && (
+            <div className="space-y-6">
+              {/* Revenus et bases imposables */}
+              <div className="bg-white rounded-lg p-6 border border-slate-200">
+                <h3 className="text-lg font-semibold mb-4 text-slate-700">📊 Revenus et bases imposables</h3>
+
+                {/* Salaire */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-semibold mb-3 text-blue-700">💼 Salaire</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Brut annuel:</span>
+                      <span className="font-semibold">{formatCurrency(results.salaire_brut_annuel)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Abattement 10%:</span>
+                      <span className="font-semibold text-emerald-600">{formatCurrency(results.salaire_brut_annuel * 0.1)}</span>
+                    </div>
+                    {inputData?.versement_PER_deductible > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">PER déductible:</span>
+                        <span className="font-semibold text-emerald-600">{formatCurrency(inputData.versement_PER_deductible)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-blue-100 font-semibold">
+                      <span className="text-blue-700">Base imposable:</span>
+                      <span className="text-blue-700">{formatCurrency(results.salaire_imposable)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenus fonciers */}
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 text-green-700">🏠 Revenus fonciers</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Loyers perçus:</span>
+                      <span className="font-semibold">{formatCurrency(results.loyers_percus_total)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Charges:</span>
+                      <span className="font-semibold text-orange-600">{formatCurrency(results.charges_foncieres_total)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Frais gestion:</span>
+                      <span className="font-semibold text-orange-600">{formatCurrency(results.frais_gestion)}</span>
+                    </div>
+                    {results.travaux_deja_effectues > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Travaux actuels:</span>
+                        <span className="font-semibold text-orange-600">{formatCurrency(results.travaux_deja_effectues)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-green-100 font-semibold">
+                      <span className="text-green-700">Base imposable:</span>
+                      <span className="text-green-700">{formatCurrency(Math.max(results.revenu_foncier_net, 0))}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Résumé fiscal */}
+              <div className="bg-white rounded-lg p-6 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-slate-700">💰 Résumé fiscal</h3>
+                  <Dialog open={showTaxCalculationModal} onOpenChange={setShowTaxCalculationModal}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-xs">
+                        📊 Détail complet
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Détail des calculs d&apos;impôt</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="bg-white rounded-lg p-4 border border-slate-200">
+                          <h4 className="font-semibold text-slate-700 mb-3">📊 Assiette imposable totale</h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span>Salaire imposable:</span>
+                              <span className="font-semibold">{formatCurrency(results.salaire_imposable)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Base imposable foncière:</span>
+                              <span className="font-semibold">{formatCurrency(Math.max(results.revenu_foncier_net, 0))}</span>
+                            </div>
+                            <div className="border-t pt-2">
+                              <div className="flex justify-between font-semibold text-blue-700">
+                                <span>Total:</span>
+                                <span>{formatCurrency(results.salaire_imposable + Math.max(results.revenu_foncier_net, 0))}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                {/* Décote fiscale */}
+                {results && (results.decote_sans_foncier > 0 || results.decote_avec_foncier > 0) && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-green-600">💰 Décote fiscale</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-6 px-2"
+                        onClick={() => setShowDecoteModal(true)}
+                      >
+                        Détail
+                      </Button>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Décote appliquée:</span>
+                        <span className="font-semibold text-green-600">-{formatCurrency(results.decote_avec_foncier)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal décote fiscale */}
+                <Dialog open={showDecoteModal} onOpenChange={setShowDecoteModal}>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Détail de la décote fiscale</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="bg-white rounded p-4 border border-slate-200">
+                        <h4 className="font-semibold text-slate-700 mb-3">📋 Calcul de la décote</h4>
+                        <div className="text-sm space-y-2">
+                          <div className="text-gray-700">
+                            <strong>Impôt brut :</strong> {formatCurrency(results.IR_avec_foncier)}<br/>
+                            <strong>Forfait décote :</strong> {formatCurrency(results.tax_params?.forfaitCelibataire || 889)}<br/>
+                            <strong>Formule :</strong> Décote = {formatCurrency(results.tax_params?.forfaitCelibataire || 889)} - 45,25% × {formatCurrency(results.IR_avec_foncier)}<br/>
+                            <strong>Résultat :</strong> Décote appliquée = {formatCurrency(results.decote_avec_foncier)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Résumé final */}
+                <div className="space-y-1">
+                  <div className="flex justify-between pt-1 border-t border-slate-100 text-xs">
+                    <span className="text-slate-600 font-medium">Impôt sur le revenu:</span>
+                    <span className="font-bold text-blue-700">{formatCurrency(results.total_avec_foncier)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-600">Taux effectif:</span>
+                    <span className="font-semibold text-orange-600">{((results.total_avec_foncier / (results.salaire_imposable + Math.max(results.revenu_foncier_net, 0))) * 100).toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
